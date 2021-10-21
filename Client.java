@@ -19,6 +19,9 @@ public class Client {
 	byte[] handshake_message = new byte[32];	   //array for handshake
 	byte[] speed;
 	byte[] ran;
+	byte[] incomingMessage = new byte[100];
+	Message msg;
+	Message inMSG;
 
     public void Client() {}
     
@@ -68,7 +71,26 @@ public class Client {
 			
 			while(true)
 			{
-				System.out.print("Hello, please input a sentence: ");
+				//New Implementation w/ Message Class
+				System.out.print("Hello, please input message type (integer): ");
+				type = bufferedReader.readLine();
+				int msgType = Integer.parseInt(type);
+				if (msgType >= 0 && msgType <= 3)
+				{
+					msg = new Message(msgType);
+				}
+				else
+				{
+					System.out.print("Please input message: ");
+					message = bufferedReader.readLine();
+					msg = new Message(msgType, message);
+				}
+				sendMessage(msg.getMessageInBytes());
+				int readLen = in.read(incomingMessage);
+				inMSG = new Message(incomingMessage);
+				System.out.println("Received Message: " + inMSG.getMsgPayload());
+				//Old Implementation
+				/*System.out.print("Hello, please input a sentence: ");
 				//read a sentence from the standard input
 				message = bufferedReader.readLine();
                 //get msg type
@@ -86,7 +108,7 @@ public class Client {
 				//Receive the upperCase sentence from the server
 				MESSAGE = (String)in.readUTF();
 				//show the message to the user
-				System.out.println("Receive message: " + MESSAGE);
+				System.out.println("Receive message: " + MESSAGE);*/
 			}
 		}
 		catch (ConnectException e) {
@@ -123,6 +145,18 @@ public class Client {
 			out.flush();
 			System.out.println("After flush");
 			//out.flush();
+		}
+		catch(IOException ioException){
+			ioException.printStackTrace();
+		}
+	}
+	void sendMessage(byte[] msg)
+	{
+		try{
+			//stream write the message
+			out.write(msg);
+			out.flush();
+			System.out.println("After flush");
 		}
 		catch(IOException ioException){
 			ioException.printStackTrace();

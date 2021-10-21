@@ -31,6 +31,7 @@ public class Server {
      	*/
     	private static class Handler extends Thread {
         	private String message;    //message received from the client
+			private byte[] inMSG = new byte[100];
 		private String MESSAGE;    //uppercase message send to the client
 		private Socket connection;
         	//private ObjectInputStream in;	//stream read from the socket

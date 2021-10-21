@@ -89,26 +89,6 @@ public class Client {
 				int readLen = in.read(incomingMessage);
 				inMSG = new Message(incomingMessage);
 				System.out.println("Received Message: " + inMSG.getMsgPayload());
-				//Old Implementation
-				/*System.out.print("Hello, please input a sentence: ");
-				//read a sentence from the standard input
-				message = bufferedReader.readLine();
-                //get msg type
-                System.out.print("Please enter type: ");
-                type = bufferedReader.readLine();
-                //insert type at start of string
-                message = type + message;
-                //get bytelength of string  NOTE: this currently includes type field.  Unsure if this is correct or not.
-                byte_length = message.getBytes().length;
-                //insert byte no.
-                byte_length_string = String.valueOf(byte_length);
-                message = byte_length_string + message;
-				//Send the sentence to the server
-				sendMessage(message);
-				//Receive the upperCase sentence from the server
-				MESSAGE = (String)in.readUTF();
-				//show the message to the user
-				System.out.println("Receive message: " + MESSAGE);*/
 			}
 		}
 		catch (ConnectException e) {

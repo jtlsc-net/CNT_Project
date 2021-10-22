@@ -73,7 +73,8 @@ public class Server {
 			private DataOutputStream out;
 			private DataInputStream in;
 			
-			FileOutputStream actual_file_out;
+			// FileOutputStream actual_file_out;
+			BufferedWriter buffered_out;
 		private int no;		//The index number of the client
 
 			
@@ -91,7 +92,8 @@ public class Server {
 			out = new DataOutputStream(connection.getOutputStream());
 			//in = new ObjectInputStream(connection.getInputStream());
 			in = new DataInputStream(connection.getInputStream());
-			actual_file_out = new FileOutputStream
+			// actual_file_out = new FileOutputStream("output.dat");
+			buffered_out = new BufferedWriter(new FileWriter("output.dat", true));
 			byte[] get_msg = new byte[32];
 			//Check Handshake
 			for(int i = 0; i < 32; i++){
@@ -112,6 +114,7 @@ public class Server {
 					System.out.println("RLength: " + rMSG.getMsgLength());  //R
 					System.out.println("RType: " + rMSG.getMsgType());
 					System.out.println("Receive message: " + rMSG.getMsgPayload() + " from client " + no);
+					buffered_out.write(rMSG.getMsgPayload());
 					//Capitalize all letters in the message
 //					MESSAGE = message.toUpperCase();
 //					//send MESSAGE back to the client
@@ -132,6 +135,7 @@ public class Server {
 			try{
 				in.close();
 				out.close();
+				buffered_out.close();
 				connection.close();
 			}
 			catch(IOException ioException){

@@ -16,12 +16,22 @@ public class Message
         msgLength = 1;
     }
 
-    //constructor for messages of types 4-7
+    //constructor for messages of types 4-6
     public Message(int _msgType, String _msgPayload)
     {
         msgType = _msgType;
         msgPayload = _msgPayload;
         msgLength = 1 + _msgPayload.getBytes(StandardCharsets.UTF_8).length;
+        byte[] msgPayloadBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(msgPayloadBytes, 0, msgInBytes, 5, msgLength - 1);
+    }
+
+    public Message(int _msgType, byte[] _msgPayload)
+    {
+        msgType = _msgType;
+        msgPayload = new String(_msgPayload, StandardCharsets.UTF_8);
+        msgLength = 1 + _msgPayload.length;
+        System.out.println("Message payload on encode: " + msgPayload);
     }
 
     public Message(byte[] mesgInBytes)
@@ -36,9 +46,11 @@ public class Message
         System.arraycopy(msgInBytes, 0, msgLengthInBytes, 0, 4);
         msgLength = ByteBuffer.wrap(msgLengthInBytes).getInt();
         msgType = msgInBytes[4];
+        //TODO: This breaks if we have a message of 0.
         byte[] msgPayloadInBytes = new byte[msgLength - 1];
         System.arraycopy(msgInBytes, 5, msgPayloadInBytes, 0, msgLength - 1);
         msgPayload = new String(msgPayloadInBytes);
+        System.out.println("Message payload on decode: " + msgPayload);
     }
 
     public int getMsgLength()
@@ -73,11 +85,11 @@ public class Message
         msgInBytes[msgLengthBytes.length] = (byte) msgType;
 
         //inserting message payload, if necessary since msgType 0-3 do not need/send payloads
-        if (!msgPayload.equals(""))
-        {
-            byte[] msgPayloadBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
-            System.arraycopy(msgPayloadBytes, 0, msgInBytes, 5, msgLength - 1);
-        }
+        // if (!msgPayload.equals(""))
+        // {
+        //     byte[] msgPayloadBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
+        //     System.arraycopy(msgPayloadBytes, 0, msgInBytes, 5, msgLength - 1);
+        // }
         return msgInBytes;
     }
 

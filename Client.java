@@ -99,9 +99,17 @@ public class Client {
 				ioReadException.printStackTrace();
 			}
 			actual_file_in = new FileInputStream(actual_file_name);
+			//Actual message sending loop.
+			int user_piece_index = 0;
+			byte[] byte_piece = new byte[actual_file_piece_size];
+			byte baby_byte;
 			while(true)
 			{
 				//New Implementation w/ Message Class
+				//clear out byte array for reading.
+				for(int i = 0; i < actual_file_piece_size; i++){
+					byte_piece[i] = 0;
+				}
 				System.out.print("Hello, please input message type (integer): ");
 				int msgType = Integer.parseInt(bufferedReader.readLine());
 				if (msgType >= 0 && msgType <= 3)
@@ -110,7 +118,17 @@ public class Client {
 				}
 				else if(msgType == 7){
 					System.out.print("Hello, please input piece index field number (integer): ");
-					
+					user_piece_index = Integer.parseInt(bufferedReader.readLine());
+					actual_file_in.skip((user_piece_index * 12));
+					for(int read_index = 0; read_index < 12; read_index++){
+						if((baby_byte = (byte) actual_file_in.read()) != (byte) -1){
+							byte_piece[read_index] = baby_byte;
+						}
+					}
+					msg = new Message(msgType, byte_piece);
+				}
+				else if(msgType == 8){
+					break;
 				}
 				else
 				{

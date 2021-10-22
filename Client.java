@@ -73,7 +73,6 @@ public class Client {
 				rec_msg[i] = in.readByte();
 			}
 			MESSAGE = new String(rec_msg, StandardCharsets.UTF_8);
-			System.out.println("After MESSAGE");
 			//show the message to the user
 			System.out.println("Receive message: " + MESSAGE);
 			
@@ -104,8 +103,7 @@ public class Client {
 			{
 				//New Implementation w/ Message Class
 				System.out.print("Hello, please input message type (integer): ");
-				type = bufferedReader.readLine();
-				int msgType = Integer.parseInt(type);
+				int msgType = Integer.parseInt(bufferedReader.readLine());
 				if (msgType >= 0 && msgType <= 3)
 				{
 					msg = new Message(msgType);
@@ -171,7 +169,7 @@ public class Client {
 			//stream write the message
 			out.write(msg);
 			out.flush();
-			System.out.println("After flush");
+			//System.out.println("After flush");
 		}
 		catch(IOException ioException){
 			ioException.printStackTrace();

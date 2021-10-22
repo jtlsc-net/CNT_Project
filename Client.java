@@ -123,18 +123,26 @@ public class Client {
 				int msgType = Integer.parseInt(bufferedReader.readLine());
 				if (msgType >= 0 && msgType <= 3)
 				{
-					msg = new Message(msgType);
+					msg = new Message(msgType, byte_piece);
 				}
 				else if(msgType == 4)
-				{
+				{ 
+					//indicates that the peer has the piece associated with this index
+					byte[] pieceIndex = new byte[4];
+					//msg = new Message(msgType, byte_piece);
 					break;
 				}
 				else if(msgType == 5)
 				{
+					//if the peer has nothing send empty message payload else check bitfield
+					//msg = new Message(msgType, byte_piece);
 					break;
 				}
 				else if(msgType == 6)
 				{
+					//requests the piece associated with that index
+					byte[] pieceIndex = new byte[4];
+					//msg = new Message(msgType, byte_piece);
 					break;
 				}
 				else if(msgType == 7){

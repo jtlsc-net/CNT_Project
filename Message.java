@@ -1,4 +1,5 @@
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 
 public class Message
 {
@@ -31,7 +32,9 @@ public class Message
 
     private void parseMessageInBytes()
     {
-        msgLength = msgInBytes.length - 4;
+        byte[] msgLengthInBytes = new byte[4];
+        System.arraycopy(msgInBytes, 0, msgLengthInBytes, 0, 4);
+        msgLength = ByteBuffer.wrap(msgLengthInBytes).getInt();
         msgType = msgInBytes[4];
         byte[] msgPayloadInBytes = new byte[msgLength - 1];
         System.arraycopy(msgInBytes, 5, msgPayloadInBytes, 0, msgLength - 1);
@@ -65,22 +68,14 @@ public class Message
         byte[] msgLengthBytes = convertIntToBytes(msgLength);
 
         //inserting first 4 bytes of message: msgLength field
-        /*for (int i = 0; i < msgLengthBytes.length; i++)
-        {
-            msgInBytes[i] = msgLengthBytes[i];
-        }*/
         System.arraycopy(msgLengthBytes, 0, msgInBytes, 0, 4);
         //inserting message type (1 byte)
-        msgInBytes[msgLengthBytes.length + 1] = (byte) msgType;
+        msgInBytes[msgLengthBytes.length] = (byte) msgType;
 
         //inserting message payload, if necessary since msgType 0-3 do not need/send payloads
         if (!msgPayload.equals(""))
         {
             byte[] msgPayloadBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
-            /*for (int i = 0; i < msgPayloadBytes.length; i++)
-            {
-                msgInBytes[i + 5] = msgPayloadBytes[i];
-            }*/
             System.arraycopy(msgPayloadBytes, 0, msgInBytes, 5, msgLength - 1);
         }
         return msgInBytes;

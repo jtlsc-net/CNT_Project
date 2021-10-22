@@ -31,7 +31,8 @@ public class Server {
      	*/
     	private static class Handler extends Thread {
         	private String message;    //message received from the client
-			private byte[] inMSG = new byte[100];
+			private byte[] inMSG;
+			private Message rMSG;
 		private String MESSAGE;    //uppercase message send to the client
 		private Socket connection;
         	//private ObjectInputStream in;	//stream read from the socket
@@ -60,22 +61,24 @@ public class Server {
 			}
 			message = new String(get_msg, StandardCharsets.UTF_8);
 			System.out.println("Receive message: " + message + " from client " + no);
-			int msg_no = get_msg[31];
-			System.out.println("Client is: " + msg_no);
 			MESSAGE = message.toUpperCase();
 			sendMessage(MESSAGE);
 			// try{
 				while(true)
 				{
 					//receive the message sent from the client
-					get_msg[0] = in.readByte();
-					message = new String(get_msg, StandardCharsets.UTF_8);
+					inMSG = new byte[100];
+					int readLen = in.read(inMSG);
+					rMSG = new Message(inMSG);
 					//show the message to the user
-					System.out.println("Receive message: " + message + " from client " + no);
+					System.out.println("RLength: " + rMSG.getMsgLength());  //R
+					System.out.println("RType: " + rMSG.getMsgType());
+					System.out.println("Receive message: " + rMSG.getMsgPayload() + " from client " + no);
 					//Capitalize all letters in the message
-					MESSAGE = message.toUpperCase();
-					//send MESSAGE back to the client
-					sendMessage(MESSAGE);
+//					MESSAGE = message.toUpperCase();
+//					//send MESSAGE back to the client
+//					sendMessage(MESSAGE);
+					sendMessage(rMSG.getMessageInBytes());
 				}
 			// }
 			
@@ -107,6 +110,18 @@ public class Server {
 			//out.writeByte('\n');
 			out.flush();
 			System.out.println("Send message: " + msg + " to Client " + no);
+		}
+		catch(IOException ioException){
+			ioException.printStackTrace();
+		}
+	}
+	void sendMessage(byte[] msg)
+	{
+		try{
+			//stream write the message
+			out.write(msg);
+			out.flush();
+//			System.out.println("After flush");
 		}
 		catch(IOException ioException){
 			ioException.printStackTrace();

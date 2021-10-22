@@ -10,7 +10,7 @@ public class Server {
 	
 
 	private static final int sPort = 8000;   //The server will be listening on this port number
-
+	public static byte[] header = "P2PFILESHARINGPROJ".getBytes();
 	public static void main(String[] args) throws Exception {
 		// File Stream for config files/sending file
 		FileInputStream cfg_in;
@@ -68,6 +68,7 @@ public class Server {
 			private Message rMSG;
 		private String MESSAGE;    //uppercase message send to the client
 		private Socket connection;
+		private Boolean isValidHandshake = true;
         	//private ObjectInputStream in;	//stream read from the socket
         	//private ObjectOutputStream out;    //stream write to the socket
 			private DataOutputStream out;
@@ -99,12 +100,22 @@ public class Server {
 			for(int i = 0; i < 32; i++){
 				get_msg[i] = in.readByte();
 			}
+			for(int z = 0; z < 18; z++){
+				if (header[z] != get_msg[z]){
+					isValidHandshake = false;
+					//System.out.println("HANDSHAKE invalid");
+				}
+			}
+			
 			message = new String(get_msg, StandardCharsets.UTF_8);
 			System.out.println("Receive message: " + message + " from client " + no);
+			int msg_no = get_msg[31];
+			System.out.println("Client is: " + msg_no);
 			MESSAGE = message.toUpperCase();
 			sendMessage(MESSAGE);
 			// try{
-				while(true)
+				if(isValidHandshake) {
+					while(true)
 				{
 					//receive the message sent from the client
 					inMSG = new byte[100];
@@ -121,6 +132,8 @@ public class Server {
 //					sendMessage(MESSAGE);
 					sendMessage(rMSG.getMessageInBytes());
 				}
+				} else System.out.println("Invalid Handshake prevented connection");
+				
 			// }
 			
 			// catch(ClassNotFoundException classnot){
@@ -149,6 +162,7 @@ public class Server {
 	{
 		try{
 			out.writeBytes(msg);
+			//out.writeUTF(msg);
 			//out.writeByte('\n');
 			out.flush();
 			System.out.println("Send message: " + msg + " to Client " + no);

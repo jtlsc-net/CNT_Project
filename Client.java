@@ -11,6 +11,14 @@ public class Client {
 	DataOutputStream out;
  	//ObjectInputStream in;          //stream read from the socket
 	DataInputStream in;
+
+	// File Stream for config files/sending file
+	FileInputStream actual_file_in;
+	//Variables related to file information
+	String actual_file_name;
+	int actual_file_size;
+	int actual_file_piece_size;
+
 	String message;                //message send to the server
 	String MESSAGE;                //capitalized message read from the server
     String type;                   //type of msg
@@ -69,6 +77,29 @@ public class Client {
 			//show the message to the user
 			System.out.println("Receive message: " + MESSAGE);
 			
+			// TODO: Make this not like 15 nested try loops.
+			// Read config info from Common.cfg.
+			// This includes name, size, and piece size.
+			try{
+				BufferedReader br = new BufferedReader(new FileReader("Common.cfg"));
+				String[] line = new String[3];
+				//TODO: expand for proper cfg file.
+				for(int i = 0; i < 3; i++){
+					line[i] = br.readLine();
+				}
+				
+				//Put data from config into vars.
+				actual_file_name = line[0].substring(9);
+				actual_file_size = Integer.parseInt(line[1].substring(9));
+				actual_file_piece_size = Integer.parseInt(line[2].substring(10));
+				System.out.println("Name: " + actual_file_name + ", size: " + actual_file_size + ", piece: " + actual_file_piece_size);
+				br.close();
+			}
+			catch(IOException ioReadException){
+				System.out.println("Error while reading config file.");
+				ioReadException.printStackTrace();
+			}
+			actual_file_in = new FileInputStream(actual_file_name);
 			while(true)
 			{
 				//New Implementation w/ Message Class
@@ -78,6 +109,10 @@ public class Client {
 				if (msgType >= 0 && msgType <= 3)
 				{
 					msg = new Message(msgType);
+				}
+				else if(msgType == 7){
+					System.out.print("Hello, please input piece index field number (integer): ");
+					
 				}
 				else
 				{

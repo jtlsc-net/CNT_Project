@@ -7,12 +7,45 @@ import java.nio.charset.StandardCharsets;
 
 public class Server {
 
+	
+
 	private static final int sPort = 8000;   //The server will be listening on this port number
 
 	public static void main(String[] args) throws Exception {
+		// File Stream for config files/sending file
+		FileInputStream cfg_in;
+		FileInputStream actual_file_in;
+		//Variables related to file information
+		String actual_file_name;
+		int actual_file_size;
+		int actual_file_piece_size;
+
 		System.out.println("The server is running."); 
         	ServerSocket listener = new ServerSocket(sPort);
 		int clientNum = 1;
+		
+			// TODO: Make this not like 15 nested try loops.
+			// Read config info from Common.cfg.
+			// This includes name, size, and piece size.
+			try{
+				BufferedReader br = new BufferedReader(new FileReader("Common.cfg"));
+				String[] line = new String[3];
+				//TODO: expand for proper cfg file.
+				for(int i = 0; i < 3; i++){
+					line[i] = br.readLine();
+				}
+				
+				//Put data from config into vars.
+				actual_file_name = line[0].substring(9);
+				actual_file_size = Integer.parseInt(line[1].substring(9));
+				actual_file_piece_size = Integer.parseInt(line[2].substring(10));
+				System.out.println("Name: " + actual_file_name + ", size: " + actual_file_size + ", piece: " + actual_file_piece_size);
+				br.close();
+			}
+			catch(IOException ioReadException){
+				System.out.println("Error while reading config file.");
+				ioReadException.printStackTrace();
+			}
         	try {
             		while(true) {
                 		new Handler(listener.accept(),clientNum).start();
@@ -38,7 +71,11 @@ public class Server {
         	//private ObjectOutputStream out;    //stream write to the socket
 			private DataOutputStream out;
 			private DataInputStream in;
+			
+			FileOutputStream actual_file_out;
 		private int no;		//The index number of the client
+
+			
 
         	public Handler(Socket connection, int no) {
             		this.connection = connection;
@@ -53,6 +90,7 @@ public class Server {
 			out = new DataOutputStream(connection.getOutputStream());
 			//in = new ObjectInputStream(connection.getInputStream());
 			in = new DataInputStream(connection.getInputStream());
+			actual_file_out = new FileOutputStream
 			byte[] get_msg = new byte[32];
 			//Check Handshake
 			for(int i = 0; i < 32; i++){

@@ -21,7 +21,7 @@ public class Server {
 		int actual_file_piece_size;
 
 		System.out.println("The server is running."); 
-        	ServerSocket listener = new ServerSocket(sPort);
+        ServerSocket listener = new ServerSocket(sPort);
 		int clientNum = 1;
 		
 			// TODO: Make this not like 15 nested try loops.

@@ -1,90 +1,44 @@
 import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class Message
 {
-    int msgLength; // 4 byte, message length field containing length of in bytes how long payload and message type are.
-    int msgType; // type of message to be sent 0-7
-    String msgPayload; // payload of the message
-    byte[] msgInBytes; // byte array of full message with all fields
-    int msgPayloadLength; // length of the messge payload
+    int msgLength;
+    byte msgType;
+    byte[] msgPayload;
+    int msgPieceIndex;
+    byte[] msgPieceContent;
 
-    //constructor for Message of types 0-3
-    public Message(int _msgType)
+    // empty constructor for using just the functions of the Message class
+    public Message()
     {
-        msgType = _msgType;
-        msgPayload = "";
-        msgLength = 1;
-        msgPayloadLength = 0;
+
     }
 
-    //constructor for messages of types 4-6
-    public Message(int _msgType, String _msgPayload, int _msgPayloadLength)
+    // constructor for reading only Actual Messages not Handshakes (Refer to checkHandshake() further down)
+    public Message(byte[] message)
     {
-        msgType = _msgType;
-        msgPayload = _msgPayload;
-        msgLength = 1 + _msgPayload.getBytes(StandardCharsets.UTF_8).length;
-        msgPayloadLength = _msgPayloadLength;
-        byte[] msgPayloadBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
-        System.arraycopy(msgPayloadBytes, 0, msgInBytes, 5, msgLength - 1);
-    }
-
-    public Message(int _msgType, byte[] _msgPayload)
-    {
-        msgType = _msgType;
-        int nullByteCount = 0; // the number of null bytes at the end of the msgPayload
-        for(int i = 5; i < msgLength;i++){
-            if(msgInBytes[i] == 0){
-                nullByteCount+=1;
-            }
+        msgLength = message.length - 4;
+        msgType = message[4];
+        if (msgType == 4 || msgType == 6)
+        {
+            msgPayload = new byte[msgLength - 1];
+            System.arraycopy(message, 5, msgPayload, 0, msgLength - 1);
+            msgPieceIndex = ByteBuffer.wrap(msgPayload).getInt();
         }
-        msgLength = 1 + _msgPayload.length;
-        // Total message length - the total # of null bits in the payload - the 5 bits for msgType and msgLength 
-        int msgPayloadEndIndex = msgLength - nullByteCount - 5;
-        if (msgPayloadEndIndex < 5){
-            msgPayload = "";
-            msgPayloadEndIndex = 0;
-           }else {
-            byte[] msgPayloadInBytes = new byte[msgPayloadEndIndex];
-            System.arraycopy(_msgPayload, 0, msgPayloadInBytes, 0, msgPayloadEndIndex);
-            msgPayload = new String(msgPayloadInBytes,StandardCharsets.UTF_8);
-            msgPayloadLength = msgPayloadEndIndex;
-           }
-        //msgPayload = new String(_msgPayload, StandardCharsets.UTF_8);
-        System.out.println("Message payload on encode: " + msgPayload);
-    }
-
-    public Message(byte[] mesgInBytes)
-    {
-        msgInBytes = mesgInBytes;
-        parseMessageInBytes();
-    }
-
-    private void parseMessageInBytes()
-    {
-        byte[] msgLengthInBytes = new byte[4];
-        System.arraycopy(msgInBytes, 0, msgLengthInBytes, 0, 4);
-        msgLength = ByteBuffer.wrap(msgLengthInBytes).getInt();
-        msgType = msgInBytes[4];
-        int nullByteCount = 0; // the number of null bytes at the end of the msgPayload
-        for(int i = 5; i < msgLength;i++){
-            if(msgInBytes[i] == 0){
-                nullByteCount+=1;
-            }
+        else if (msgType == 7)
+        {
+            msgPayload = new byte[msgLength - 1];
+            System.arraycopy(message, 5, msgPayload, 0, msgLength - 1);
+            msgPieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(msgPayload, 0, 4)).getInt();
+            msgPieceContent = Arrays.copyOfRange(msgPayload, 4, msgPayload.length);
         }
-        // Total message length - the total # of null bits in the payload - the 5 bits for msgType and msgLength 
-        int msgPayloadEndIndex = msgLength - nullByteCount - 5;
-        //System.out.println("The msgPayload Index is: " + msgPayloadEndIndex);
-        //TODO: This breaks if we have a message of 0.
-       // System.out.println("The end index of the message is: " + (msgLength-1));
-       if (msgPayloadEndIndex < 5){
-        msgPayload = "";
-       }else {
-        byte[] msgPayloadInBytes = new byte[msgPayloadEndIndex];
-        System.arraycopy(msgInBytes, 5, msgPayloadInBytes, 0, msgPayloadEndIndex);
-        msgPayload = new String(msgPayloadInBytes,StandardCharsets.UTF_8);
-       }
-        System.out.println("Message payload on decode: " + msgPayload);
+        else if (msgType == 5)
+        {
+            msgPayload = new byte[msgLength - 1];
+            System.arraycopy(message, 5, msgPayload, 0, msgLength - 1);
+        }
     }
 
     public int getMsgLength()
@@ -92,40 +46,79 @@ public class Message
         return msgLength;
     }
 
-    public int getMsgType()
+    public byte getMsgType()
     {
         return msgType;
     }
 
-    public String getMsgPayload()
+    public byte[] getMsgPayload()
     {
         return msgPayload;
     }
 
-
-    //returns byte array to be sent through socket
-    public byte[] getMessageInBytes()
+    public int getMsgPieceIndex()
     {
-        // msgLength is only the msgType + msgPayload, so missing 4 bytes for msgLength field
-        int actualLength = msgLength + 4;
-        // This is the converted byte array passed to the socket
-        msgInBytes = new byte[actualLength];
-        // msgLength is an integer which is 4 bytes in size, but has to be converted to byte array to get the 4 bytes
-        byte[] msgLengthBytes = convertIntToBytes(msgLength);
+        return msgPieceIndex;
+    }
 
-        //inserting first 4 bytes of message: msgLength field
-        System.arraycopy(msgLengthBytes, 0, msgInBytes, 0, 4);
-        //inserting message type (1 byte)
-        msgInBytes[msgLengthBytes.length] = (byte) msgType;
-        byte[] msgPayloadInBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
-        System.arraycopy(msgPayloadInBytes, 0, msgInBytes, 5, msgPayload.length());
-        //inserting message payload, if necessary since msgType 0-3 do not need/send payloads
-        // if (!msgPayload.equals(""))
-        // {
-        //     byte[] msgPayloadBytes = msgPayload.getBytes(StandardCharsets.UTF_8);
-        //     System.arraycopy(msgPayloadBytes, 0, msgInBytes, 5, msgLength - 1);
-        // }
-        return msgInBytes;
+    public byte[] getMsgPieceContent()
+    {
+        return msgPieceContent;
+    }
+
+    public byte[] createHandshakeMessage(int _peerID)
+    {
+        byte[] message = new byte[32];
+        byte[] header = "P2PFILESHARINGPROJ".getBytes();
+        System.arraycopy(header, 0, message, 0, 18);
+        for (int i = 18; i < 28; i++)
+        {
+            message[i] = (byte) 0;
+        }
+        byte[] peerID = convertIntToBytes(_peerID);
+        System.arraycopy(peerID, 0, message, 28, 4)  ;
+        return message;
+    }
+
+//    public byte[] createBitFieldMessage(Bitfield payload)
+//    {
+//        // ADD BITFIELD
+//    }
+
+    public byte[] createCUINMessage(int _msgType)
+    {
+        byte[] message = new byte[5];
+        System.arraycopy(convertIntToBytes(1), 0, message, 0, 4);
+        message[4] = (byte) _msgType;
+        return message;
+    }
+
+    // creates the have(4)/request(6) message
+    public byte[] createHOrRMessage(int _msgType, int pieceIndex)
+    {
+        // 9 bytes = msgLength (4 byte pieceIndex + 1 byte message type) + msgType (1 byte) + msgPayload (4 bytes)
+        byte[] message = new byte[9];
+        System.arraycopy(convertIntToBytes(5), 0, message, 0, 4);
+        message[4] = (byte) _msgType;
+        System.arraycopy(convertIntToBytes(pieceIndex), 0, message, 5, 4);
+        return message;
+    }
+
+    public byte[] createPieceMessage(int pieceIndex, byte[] content)
+    {
+        byte[] message = new byte[9 + content.length];
+        System.arraycopy(convertIntToBytes(9 + content.length), 0, message, 0, 4);
+        message[4] = (byte) 7;
+        System.arraycopy(convertIntToBytes(pieceIndex), 0, message, 5, 4);
+        System.arraycopy(content, 0, message, 9, content.length);
+        return message;
+    }
+
+    public boolean checkHandshake(byte[] handshake, int expectedPeerID)
+    {
+        String header = new String(Arrays.copyOfRange(handshake, 0, 18), StandardCharsets.UTF_8);
+        int peerID = ByteBuffer.wrap(Arrays.copyOfRange(handshake, 28, 32)).getInt();
+        return header.equals("P2PFILESHARINGPROJ") && peerID == expectedPeerID;
     }
 
     //helper function to convert integer to byte[] array.
@@ -140,4 +133,7 @@ public class Message
                 };
     }
 }
+
+
+
 

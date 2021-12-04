@@ -20,7 +20,9 @@ public class peerProcess extends Thread{
     private Socket serverSocket;
     private DataOutputStream out;
     private DataInputStream in;
+    private Message msg = new Message(); // Singleton-like object, to create all messages and check handshake
     public static byte[] header = "P2PFILESHARINGPROJ".getBytes();
+
 
     peerProcess(int id, String name, int type) {
         peerId = id;
@@ -170,27 +172,30 @@ public class peerProcess extends Thread{
         if(threadType == 2){
             // Do client seek ops.
             try{
-                byte[] handshakeBytesFirstField = "P2PFILESHARINGPROJ".getBytes();
-                byte[] handshakeMessage = new byte[32];
-                byte[] peerIdBytes = ByteBuffer.allocate(4).putInt(peerId).array();
-
+//                byte[] handshakeBytesFirstField = "P2PFILESHARINGPROJ".getBytes();
+//                byte[] handshakeMessage = new byte[32];
+//                byte[] peerIdBytes = ByteBuffer.allocate(4).putInt(peerId).array();
+                
                 serverSocket = new Socket(hostName, sendingPort);
                 out = new DataOutputStream(serverSocket.getOutputStream());
                 in = new DataInputStream(serverSocket.getInputStream());
 
-                for(int i = 0; i < 18; i++){
-                    handshakeMessage[i] = handshakeBytesFirstField[i];
-                }
-                for(int j = 18; j < 28; j++)
-                {
-                    handshakeMessage[j] = 0;
-                }
-                for(int k = 28; k < 32; k++)
-                {
-                    handshakeMessage[k] = peerIdBytes[k-28];
-                }
+//                for(int i = 0; i < 18; i++){
+//                    handshakeMessage[i] = handshakeBytesFirstField[i];
+//                }
+//                for(int j = 18; j < 28; j++)
+//                {
+//                    handshakeMessage[j] = 0;
+//                }
+//                for(int k = 28; k < 32; k++)
+//                {
+//                    handshakeMessage[k] = peerIdBytes[k-28];
+//                }
+                
                 // String q = new String(handshakeMessage, StandardCharsets.UTF_8);
-                sendMessage(handshakeMessage);
+                
+                sendMessage(msg.createHandShakeMessage());
+                // sendMessage(handshakeMessage);
 
             }
             catch(ConnectException e){

@@ -1,6 +1,8 @@
 import java.io.*;
 import java.util.*;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 public class peerProcess extends Thread{
     private int peerId;
@@ -16,6 +18,9 @@ public class peerProcess extends Thread{
     private int threadType;
     private Socket clientSocket;
     private Socket serverSocket;
+    private DataOutputStream out;
+    private DataInputStream in;
+    public static byte[] header = "P2PFILESHARINGPROJ".getBytes();
 
     peerProcess(int id, String name, int type) {
         peerId = id;
@@ -80,7 +85,24 @@ public class peerProcess extends Thread{
         return String.format("PeerId: %d \n HostName: %s \n listeningPort: %d \n hasFile:%d \n fileName:%s \n fileSize:%d \n pieceSize:%d",peerId,hostName,listeningPort,hasFile, fileName,fileSize,pieceSize);
     }
 
+    void sendMessage(byte[] msg)
+	{
+		try{
+			//stream write the message
+			out.write(msg);
+			out.flush();
+			//System.out.println("After flush");
+		}
+		catch(IOException ioException){
+			ioException.printStackTrace();
+		}
+	}
+
     public void run(){
+        // Each threadtype is a different type of thread
+        // the main server thread is 0
+        // when it receives a connection it spawns a 1 thread
+        // and when a peer attempts to connect to another peer it spawns a 2 thread
         // Type 0 = server listener thread
         if(threadType == 0){
             // Start listener server
@@ -108,21 +130,68 @@ public class peerProcess extends Thread{
                 System.out.println(e);
             }
         }
+
+
         if(threadType == 1){
             // Do server operations
             try{
+                byte[] get_msg = new byte[32];
+                byte[] remotePeerBytes = new byte[4];
+                int remotePeer;
+                Boolean badHeader = false;
+                out = new DataOutputStream(clientSocket.getOutputStream());
+			    in = new DataInputStream(clientSocket.getInputStream());
                 Log log = new Log(peerId);
-                log.WriteLog(1, peerId, 1);
+
+                for(int i = 0; i < 32; i++){
+                    get_msg[i] = in.readByte();
+                }
+                for(int z = 0; z < 18; z++){
+                    if (header[z] != get_msg[z]){
+                        log.WriteLog(6, peerId, 0);
+                        badHeader = true;
+                    }
+                }
+                if(!badHeader){
+                    for(int j = 28; j < 32; j++){
+                        remotePeerBytes[j-28] = get_msg[j];
+                    }
+                    remotePeer = ByteBuffer.wrap(remotePeerBytes).getInt();
+                    log.WriteLog(1, peerId, remotePeer);
+                }
             }
             catch(IOException e){
                 //lol
             }
 
         }
+
+
         if(threadType == 2){
             // Do client seek ops.
             try{
+                byte[] handshakeBytesFirstField = "P2PFILESHARINGPROJ".getBytes();
+                byte[] handshakeMessage = new byte[32];
+                byte[] peerIdBytes = ByteBuffer.allocate(4).putInt(peerId).array();
+
                 serverSocket = new Socket(hostName, sendingPort);
+                out = new DataOutputStream(serverSocket.getOutputStream());
+                in = new DataInputStream(serverSocket.getInputStream());
+
+                for(int i = 0; i < 18; i++){
+                    handshakeMessage[i] = handshakeBytesFirstField[i];
+                }
+                for(int j = 18; j < 28; j++)
+                {
+                    handshakeMessage[j] = 0;
+                }
+                for(int k = 28; k < 32; k++)
+                {
+                    handshakeMessage[k] = peerIdBytes[k-28];
+                }
+                // String q = new String(handshakeMessage, StandardCharsets.UTF_8);
+                sendMessage(handshakeMessage);
+
             }
             catch(ConnectException e){
                 System.err.println(e);
@@ -156,8 +225,10 @@ public class peerProcess extends Thread{
                 peerID = Integer.parseInt(args[0]);
                 peerProcess peer = new peerProcess(peerID, "server_listener", 0);
                 try {
+                    // Read in from PeerInfo
                     BufferedReader in = new BufferedReader(new FileReader("PeerInfo.cfg"));
-                    while((st = in.readLine()) != null) {
+                    while((st = in.readLine()) != null){
+                        // Keep all ones before the current one in the list, and set values for the current one.
                         
                          String[] tokens = st.split("\\s+");
                          //System.out.println("tokens begin ----");
@@ -203,7 +274,7 @@ public class peerProcess extends Thread{
                 peerProcess clientPeer;
                 for (int i = 0; i < stringArray.size(); i++){
                     hosts = stringArray.get(i);
-                    clientPeer = new peerProcess(Integer.parseInt(hosts[0]), "clientPeer" + hosts[0], 2);
+                    clientPeer = new peerProcess(peerID, "clientPeer" + peerID, 2);
                     clientPeer.setHostName(hosts[1]);
                     clientPeer.setSendingPort(Integer.parseInt(hosts[2]));
                     clientPeer.setHasFile(Integer.parseInt(hosts[3]));

@@ -194,7 +194,7 @@ public class peerProcess extends Thread{
                 
                 // String q = new String(handshakeMessage, StandardCharsets.UTF_8);
                 
-                sendMessage(msg.createHandShakeMessage());
+                sendMessage(msg.createHandshakeMessage(peerId));
                 // sendMessage(handshakeMessage);
 
             }

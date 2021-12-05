@@ -174,9 +174,9 @@ public class peerProcess extends Thread{
                 // System.out.println(new String(completeFile));
                 int pieceBegin = 0;
                 int pieceEnd = 0;
-                File newFile = new File(output.getAbsolutePath() + "/RECONSTRUCTED" + fileName);
+                // File newFile = new File(output.getAbsolutePath() + "/RECONSTRUCTED" + fileName);
 
-                Files.write(newFile.toPath(), completeFile);
+                // Files.write(newFile.toPath(), completeFile);
 
                 for (int i = 0; i < totalPieces; i++) {
                     if (i == totalPieces - 1) {

@@ -11,10 +11,25 @@ public class RemotePeerInfo {
 	public String peerId;
 	public String peerAddress;
 	public String peerPort;
+	public int peerInt;
+	public boolean unchoked = false;
+	public boolean choked = false; 
+	public boolean optimisticallyUnchoked = false;
+	public int piecesDownloaded = 0;
+
 	
 	public RemotePeerInfo(String pId, String pAddress, String pPort) {
 		peerId = pId;
+		try{
+			peerInt = Integer.valueOf(peerId);
+		} catch (Exception e){
+			peerInt = -1;
+		}
 		peerAddress = pAddress;
 		peerPort = pPort;
 	}
+	
+    public int getPiecesDownloaded() {
+		return piecesDownloaded;
+    }
 }

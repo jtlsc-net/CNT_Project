@@ -17,7 +17,16 @@ public class peerProcess extends Thread{
     private int pieceSize = 0;
     private int[] bitfield;
     private File output;
+    private int preferredNeighbors; 
+    private int unchokingInterval;
+    private int optimisticUnchokingInterval;
+    private boolean optimisticallyUnchoked;
+    private boolean unchoked = false; 
+    private boolean choked = false;
+    private ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
+    private HashMap<Integer,peerProcess> connectedPeers = new HashMap<Integer,peerProcess>();
     private Thread t;
+    private Log log;
     private String threadName;
     private int threadType;
     private Socket clientSocket;
@@ -26,6 +35,12 @@ public class peerProcess extends Thread{
     private DataInputStream in;
     private Message msg = new Message(); // Singleton-like object, to create all messages and check handshake
     public static byte[] header = "P2PFILESHARINGPROJ".getBytes();
+    private static Comparator<RemotePeerInfo> downloadRates = new Comparator<RemotePeerInfo>(){
+        @Override
+        public int compare(RemotePeerInfo b1, RemotePeerInfo b2){
+            return Integer.compare(b1.getPiecesDownloaded(), b2.getPiecesDownloaded());
+        }
+    };
 
 
     peerProcess(int id, String name, int type) {
@@ -86,7 +101,6 @@ public class peerProcess extends Thread{
     public int getFileSize() {
         return fileSize;
     }
-
     public int getPieceSize() {
         return pieceSize;
     }
@@ -106,22 +120,7 @@ public class peerProcess extends Thread{
                 peerId, hostName, listeningPort, hasFile, fileName, fileSize, pieceSize);
     }
 
-    public String bitfieldtoString(int n) {
-        String result = "";
-        for (int i = 0; i < 32; i++) {
-            result += getBit(n, i);
-        }
-        return result;
-    }
-
-    public int getBit(int n, int k) { // gets the kth bit in n
-        return (n >> k) & 1;
-    }
-
-    public int modifyBit(int n, int p, int b) { // modify the pth bit in num n with binary value b
-        int mask = 1 << p;
-        return ((n & ~mask) | (b << p));
-    }
+    
 
     public void writePieces() {
         byte[] reconstructedFile = new byte[fileSize];
@@ -142,26 +141,27 @@ public class peerProcess extends Thread{
         }
     }
 
+    public ArrayList<Integer> findMissingPieces(int[] currentPeer, int[] connectedPeer){
+        int missingPiecesFound = 0; 
+        ArrayList<Integer> missingPiecesIndices = new ArrayList();
+        for(int i = 0; i < currentPeer.length; i++){
+            if(currentPeer[i] == 0 && connectedPeer[i] == 1){
+                missingPiecesFound+=1; 
+                missingPiecesIndices.add(i);
+                
+            }
+        }
+        return missingPiecesIndices; //gets returned peer calls interested if size greater than 0
+    }
+
     public void setBitField() {
         int totalPieces = (int) Math.ceil((double) (fileSize / pieceSize));
-        int bitfieldInts = (int) Math.ceil((double) (fileSize / pieceSize) / 8);
-        bitfield = new int[bitfieldInts];
+        bitfield = new int[totalPieces];
         if (getHasFile() == 1) {
             Arrays.fill(bitfield, 1);
-            int index = 0;
-            for (int i = 0; i < bitfieldInts; i++) {
-                for (int j = 0; j < 32; j++) {
-                    if (index < totalPieces) {
-                        bitfield[i] = modifyBit(bitfield[i], j, 1);
-                    } else {
-                        modifyBit(bitfield[i], j, 0);
-                    }
-                    index++;
-                }
-            }
+            
             // break the file down into number of pieces
             int piece = 0;
-
             filePieces = new byte[totalPieces][];
             output = new File("peer_" + peerId);
             if (output.exists() == false) {
@@ -199,6 +199,103 @@ public class peerProcess extends Thread{
         } else {
             Arrays.fill(bitfield, 0);
         }
+    }
+
+    public void reselectNeighbors(){
+        if (hasFile == 1){ // if the current peer has the completed file randomly select neighbors
+            if(preferredNeighbors >= connectedPeers.size()){ // if there are k or more connected neighbors
+                int neighborsSelected = 0; 
+                Random rand = new Random();
+                int upperbound = connectedPeers.size();
+                ArrayList<Integer> selectedIndex = new ArrayList<>();
+                while (neighborsSelected != preferredNeighbors){
+                    int index = rand.nextInt(upperbound);
+                    if (!selectedIndex.contains(index)){
+                        selectedIndex.add(index);
+                        neighborsSelected+=1;
+                    }
+                }
+                try {
+                    for(int i = 0; i < connectedPeers.size();i++){
+                        if (selectedIndex.contains(i)){
+                            peerInfo.get(i).unchoked = true;
+                            peerInfo.get(i).choked = false;
+                            connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
+                            log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                        }else {
+                            peerInfo.get(i).unchoked = false;
+                            peerInfo.get(i).choked = true;
+                            connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
+                            log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                        }
+                    }
+                    optimisticallyUnchoke();
+                } catch (IOException e){
+                    System.out.println("Error writting logs during reselection.");
+                }
+                
+            } else {
+                try {
+                    for(int i = 0; i < connectedPeers.size();i++){ // if there is less than k neighbors connected
+                        peerInfo.get(i).unchoked = true;
+                        peerInfo.get(i).choked = false;
+                        connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
+                        log.WriteLog(3,peerId, peerInfo.get(i).peerInt);
+                        optimisticallyUnchoke();
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error writting logs during reselection.");
+                }
+            }
+        } else { 
+            Collections.sort(peerInfo,downloadRates); // find the highest sorting rates
+            int neighborsSelected = 0; 
+            try {
+                for(int i = 0; i < peerInfo.size();i++){
+                    if( neighborsSelected < preferredNeighbors){ //unchoke the k neighbors with highest sorting rates
+                        peerInfo.get(i).unchoked = true;
+                        peerInfo.get(i).choked = false;
+                        neighborsSelected+=1;
+                        connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
+                        log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                    } else { // choke others
+                        peerInfo.get(i).unchoked = false;
+                        peerInfo.get(i).choked = true;
+                        connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
+                        log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                    }
+                }
+                optimisticallyUnchoke();
+                
+            } catch (Exception e) {
+                System.out.println("Error writting logs during reselection.");
+            }    
+        }
+    }
+    public void optimisticallyUnchoke(){  //returns the peerID of the neighbor to get choked
+        Random rand = new Random();
+        ArrayList<RemotePeerInfo> chokedPeers = new ArrayList<>();
+        for(int i = 0; i < peerInfo.size();i++){
+            if (peerInfo.get(i).choked){
+                chokedPeers.add(peerInfo.get(i));
+            }
+        }
+        int upperbound = chokedPeers.size();
+        int index = rand.nextInt(upperbound);
+        RemotePeerInfo selected = chokedPeers.get(index);
+        selected.optimisticallyUnchoked = true;
+        selected.choked = false;
+        selected.unchoked = false;  
+        connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1)); 
+        try {
+            log.WriteLog(3, peerId, selected.peerInt);
+        } catch (Exception e) {
+            System.out.println("Error writting log during optimistic unchoke.")
+        }
+    }
+
+    public double calculateRate(peerProcess peer){ //need to figure out how to calculate this
+        return 1.0;
     }
 
     void sendMessage(byte[] msg)
@@ -257,7 +354,7 @@ public class peerProcess extends Thread{
                 Boolean badHeader = false;
                 out = new DataOutputStream(clientSocket.getOutputStream());
 			    in = new DataInputStream(clientSocket.getInputStream());
-                Log log = new Log(peerId);
+                log = new Log(peerId);
 
                 for(int i = 0; i < 32; i++){
                     get_msg[i] = in.readByte();

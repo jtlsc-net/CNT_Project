@@ -9,6 +9,7 @@ public class Message
     byte[] msgPayload;
     int msgPieceIndex;
     byte[] msgPieceContent;
+    int[] msgBitfield;
 
     // empty constructor for using just the functions of the Message class
     public Message()
@@ -38,6 +39,37 @@ public class Message
         {
             msgPayload = new byte[msgLength - 1];
             System.arraycopy(message, 5, msgPayload, 0, msgLength - 1);
+            int payloadLength = msgLength - 1;
+            msgBitfield = new int[payloadLength / 4];
+            int index = 0;
+            for (int i = 0; i < msgBitfield.length; i++)
+            {
+                msgBitfield[i] = ByteBuffer.wrap(Arrays.copyOfRange(msgPayload, index, index + 4)).getInt();
+                index += 4;
+            }
+        }
+    }
+
+    public void parseMsgPayload(int msgType, byte[] _msgPayload)
+    {
+        if (msgType == 4 || msgType == 6)
+        {
+            msgPieceIndex = ByteBuffer.wrap(_msgPayload).getInt();
+        }
+        else if (msgType == 7)
+        {
+            msgPieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(_msgPayload, 0, 4)).getInt();
+            msgPieceContent = Arrays.copyOfRange(_msgPayload, 4, _msgPayload.length);
+        }
+        else if (msgType == 5)
+        {
+            msgBitfield = new int[_msgPayload.length / 4];
+            int index = 0;
+            for (int i = 0; i < msgBitfield.length; i++)
+            {
+                msgBitfield[i] = ByteBuffer.wrap(Arrays.copyOfRange(_msgPayload, index, index + 4)).getInt();
+                index += 4;
+            }
         }
     }
 
@@ -66,6 +98,8 @@ public class Message
         return msgPieceContent;
     }
 
+    public int[] getMsgBitfield() { return msgBitfield; }
+
     public byte[] createHandshakeMessage(int _peerID)
     {
         byte[] message = new byte[32];
@@ -80,10 +114,20 @@ public class Message
         return message;
     }
 
-//    public byte[] createBitFieldMessage(Bitfield payload)
-//    {
-//        // ADD BITFIELD
-//    }
+    public byte[] createBitFieldMessage(int[] bitfield)
+    {
+        // ADD BITFIELD
+        byte[] message = new byte[5 + (bitfield.length * 4)];
+        System.arraycopy(convertIntToBytes(1 + (bitfield.length * 4)), 0, message, 0, 4);
+        message[4] = (byte) 5;
+        int index = 5;
+        for (int i = 0; i < bitfield.length; i++)
+        {
+            System.arraycopy(convertIntToBytes(bitfield[i]), 0, message, index, 4);
+            index += 4;
+        }
+        return message;
+    }
 
     public byte[] createCUINMessage(int _msgType)
     {
@@ -114,12 +158,19 @@ public class Message
         return message;
     }
 
+    public boolean checkInitialHandshake(byte[] handshake)
+    {
+        String header = new String(Arrays.copyOfRange(handshake, 0, 18), StandardCharsets.UTF_8);
+        return header.equals("P2PFILESHARINGPROJ");
+    }
+
     public boolean checkHandshake(byte[] handshake, int expectedPeerID)
     {
         String header = new String(Arrays.copyOfRange(handshake, 0, 18), StandardCharsets.UTF_8);
         int peerID = ByteBuffer.wrap(Arrays.copyOfRange(handshake, 28, 32)).getInt();
         return header.equals("P2PFILESHARINGPROJ") && peerID == expectedPeerID;
     }
+
 
     //helper function to convert integer to byte[] array.
     private byte[] convertIntToBytes(int value)

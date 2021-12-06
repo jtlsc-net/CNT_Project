@@ -1,4 +1,5 @@
 import java.io.*;
+import java.nio.file.Files;
 import java.util.*;
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -10,6 +11,9 @@ public class peerProcess extends Thread{
     private int listeningPort = 0; 
     private int sendingPort = 0;
     private int hasFile = 0; //value is 1 if the peer has the complete file
+    private int numOfPrefNeighbors = 0;
+    private int unchokingInterval = 0;
+    private int optimUnchokingInterval = 0;
     private String fileName = "";
     private int fileSize = 0;
     private int pieceSize = 0;
@@ -21,6 +25,13 @@ public class peerProcess extends Thread{
     private DataOutputStream out;
     private DataInputStream in;
     private Message msg = new Message(); // Singleton-like object, to create all messages and check handshake
+    private byte[][] filePieces;
+    private int[] bitfield;
+    private File output;
+    private int initExpectedPeer;
+    private peerProcess[] connectedPeers;
+    private peerProcess[] chokedPeers;
+    private peerProcess[] unchokedPeers;
     public static byte[] header = "P2PFILESHARINGPROJ".getBytes();
 
 
@@ -38,6 +49,9 @@ public class peerProcess extends Thread{
     public void setHasFile(int hasFile) {
         this.hasFile = hasFile;
     }
+    public void setNumOfPrefNeighbors(int neighbors) { this.numOfPrefNeighbors = neighbors; }
+    public void setUnchokingInterval (int seconds) { this.unchokingInterval = seconds; }
+    public void setOptimUnchokingInterval(int seconds) { this.optimUnchokingInterval = seconds; }
     public void setFileName(String fileName) {
         this.fileName = fileName;
     }
@@ -53,6 +67,7 @@ public class peerProcess extends Thread{
     public void setSendingPort(int port){
         this.sendingPort = port;
     }
+    public void setInitExpectedPeer(int _peerId) {this.initExpectedPeer = _peerId; }
     public int getPeerId() {
         return peerId;
     }
@@ -84,7 +99,98 @@ public class peerProcess extends Thread{
         return sendingPort;
     }
     public String toString() {
-        return String.format("PeerId: %d \n HostName: %s \n listeningPort: %d \n hasFile:%d \n fileName:%s \n fileSize:%d \n pieceSize:%d",peerId,hostName,listeningPort,hasFile, fileName,fileSize,pieceSize);
+        return String.format("PeerId: %d \n HostName: %s \n listeningPort: %d \n hasFile:%d \n fileName:%s \n fileSize:%d \n pieceSize:%d \nbitfield:" + Arrays.toString(bitfield),peerId,hostName,listeningPort,hasFile, fileName,fileSize,pieceSize);
+    }
+
+    public void writePieces() {
+        byte[] reconstructedFile = new byte[fileSize];
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+
+        for (byte[] b : filePieces) {
+            os.write(b, 0, b.length);
+        }
+        reconstructedFile = os.toByteArray();
+        // System.out.println("There are " + length + "bytes in the reconstructed
+        // file");
+        File newFile = new File(output.getAbsolutePath() + "/RECONSTRUCTED" + fileName);
+        try {
+            Files.write(newFile.toPath(), reconstructedFile);
+        } catch (IOException e) {
+
+            e.printStackTrace();
+        }
+    }
+
+    public void setBitField() {
+        int totalPieces = (int) Math.ceil((double) (fileSize / pieceSize));
+        bitfield = new int[totalPieces];
+        if (getHasFile() == 1) {
+            Arrays.fill(bitfield, 1);
+
+            // break the file down into number of pieces
+            int piece = 0;
+            filePieces = new byte[totalPieces][];
+            output = new File("peer_" + peerId);
+            if (output.exists() == false) {
+                output.mkdir();
+            }
+
+            try {
+                File f = new File(output.getAbsolutePath() + "/" + fileName);
+                byte[] completeFile = Files.readAllBytes(f.toPath());
+                // System.out.println(new String(completeFile));
+                int pieceBegin = 0;
+                int pieceEnd = 0;
+                // File newFile = new File(output.getAbsolutePath() + "/RECONSTRUCTED" + fileName);
+
+                // Files.write(newFile.toPath(), completeFile);
+
+                for (int i = 0; i < totalPieces; i++) {
+                    if (i == totalPieces - 1) {
+                        filePieces[i] = Arrays.copyOfRange(completeFile, pieceBegin, fileSize);
+                        // System.out.println(new String(filePieces[i]));
+
+                    } else if (pieceBegin + pieceSize <= fileSize) {
+                        pieceEnd = pieceBegin + pieceSize;
+                        filePieces[i] = Arrays.copyOfRange(completeFile, pieceBegin, pieceEnd);
+                        // System.out.println(new String(filePieces[i]));
+                        pieceBegin = pieceEnd;
+
+                    }
+
+                }
+            } catch (Exception e) {
+                System.out.println("Error breaking down completed file");
+            }
+
+        } else {
+            Arrays.fill(bitfield, 0);
+        }
+    }
+
+    public boolean checkZerosArray(int[] bitfield)
+    {
+        for (int i = 0; i < bitfield.length; i++)
+        {
+            if (bitfield[i] != 0)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    //Temp comparison of bitfields: true if have same pieces, false if there are mismatch
+    public boolean compareBitfields(int[] currPeer, int[] connectedPeer)
+    {
+        for (int i = 0; i < currPeer.length; i++)
+        {
+            if (currPeer[i] != connectedPeer[i])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     void sendMessage(byte[] msg)
@@ -136,31 +242,94 @@ public class peerProcess extends Thread{
 
         if(threadType == 1){
             // Do server operations
-            try{
+            try {
+                // Read Initial Handshake Message from New Connection
                 byte[] get_msg = new byte[32];
                 byte[] remotePeerBytes = new byte[4];
                 int remotePeer;
-                Boolean badHeader = false;
+//                Boolean badHeader = false;
                 out = new DataOutputStream(clientSocket.getOutputStream());
-			    in = new DataInputStream(clientSocket.getInputStream());
+                in = new DataInputStream(clientSocket.getInputStream());
                 Log log = new Log(peerId);
 
-                for(int i = 0; i < 32; i++){
+                for (int i = 0; i < 32; i++) {
                     get_msg[i] = in.readByte();
                 }
-                for(int z = 0; z < 18; z++){
-                    if (header[z] != get_msg[z]){
-                        log.WriteLog(6, peerId, 0);
-                        badHeader = true;
-                    }
-                }
-                if(!badHeader){
-                    for(int j = 28; j < 32; j++){
-                        remotePeerBytes[j-28] = get_msg[j];
-                    }
-                    remotePeer = ByteBuffer.wrap(remotePeerBytes).getInt();
+
+                if (msg.checkInitialHandshake(get_msg))
+                {
+                    remotePeer = ByteBuffer.wrap(Arrays.copyOfRange(get_msg, 28, 32)).getInt();
                     log.WriteLog(1, peerId, remotePeer);
+                    initExpectedPeer = remotePeer;
                 }
+                else
+                {
+                    clientSocket.close();
+                }
+
+                sendMessage(msg.createHandshakeMessage(peerId));
+                // Checks if connection was terminated
+                if (in.read() == -1)
+                    clientSocket.close();
+                else
+                {
+                    if (!checkZerosArray(bitfield)) {
+                        sendMessage(msg.createBitFieldMessage(bitfield));
+                    }
+                    boolean allPeersDone = false; // Replace condition (This is temp solution)
+                    while (!allPeersDone)
+                    {
+                        int msgLength = in.readInt();
+                        byte msgType = in.readByte();
+                        byte[] msgPayload = new byte[msgLength - 1];
+                        in.readFully(msgPayload);
+                        switch (msgType)
+                        {
+                            case 0:
+                                break;
+                            case 1:
+                                break;
+                            case 2:
+                                log.WriteLog(4, peerId, initExpectedPeer);
+                                allPeersDone = true;
+                                break;
+                            case 3:
+                                log.WriteLog(5, peerId, initExpectedPeer);
+                                allPeersDone = true;
+                                break;
+                            case 4:
+                                break;
+                            case 5:
+                                msg.parseMsgPayload(msgType, msgPayload);
+                                if (!compareBitfields(bitfield, msg.getMsgBitfield()))
+                                {
+                                    sendMessage(msg.createCUINMessage(2));
+                                }
+                                else
+                                {
+                                    sendMessage(msg.createCUINMessage(3));
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+
+//                for(int z = 0; z < 18; z++){
+//                    if (header[z] != get_msg[z]){
+//                        log.WriteLog(6, peerId, 0);
+//                        badHeader = true;
+//                    }
+//                }
+//                if(!badHeader){
+//                    for(int j = 28; j < 32; j++){
+//                        remotePeerBytes[j-28] = get_msg[j];
+//                    }
+//                    remotePeer = ByteBuffer.wrap(remotePeerBytes).getInt();
+//                    log.WriteLog(1, peerId, remotePeer);
+//                }
+
             }
             catch(IOException e){
                 //lol
@@ -193,9 +362,70 @@ public class peerProcess extends Thread{
 //                }
                 
                 // String q = new String(handshakeMessage, StandardCharsets.UTF_8);
-                
-                sendMessage(msg.createHandShakeMessage());
+                sendMessage(msg.createHandshakeMessage(peerId));
                 // sendMessage(handshakeMessage);
+
+                //Wait for return Handshake and check for expected peerId
+
+                byte[] get_msg = new byte[32];
+                Log log = new Log(peerId);
+
+                for (int i = 0; i < 32; i++) {
+                    get_msg[i] = in.readByte();
+                }
+
+
+                // Checks for return handshake if incorrect peer
+                if (!msg.checkHandshake(get_msg, initExpectedPeer))
+                {
+                    serverSocket.close();
+                }
+                else
+                {
+                    if (!checkZerosArray(bitfield)) {
+                        sendMessage(msg.createBitFieldMessage(bitfield));
+                    }
+                    boolean allPeersDone = false; // Replace condition (This is temp solution)
+                    while (!allPeersDone)
+                    {
+                        int msgLength = in.readInt();
+                        byte msgType = in.readByte();
+                        byte[] msgPayload = new byte[msgLength - 1];
+                        in.readFully(msgPayload);
+                        switch (msgType)
+                        {
+                            case 0:
+                                break;
+                            case 1:
+                                break;
+                            case 2:
+                                log.WriteLog(4, peerId, initExpectedPeer);
+                                allPeersDone = true;
+                                break;
+                            case 3:
+                                log.WriteLog(5, peerId, initExpectedPeer);
+                                allPeersDone = true;
+                                break;
+                            case 4:
+                                break;
+                            case 5:
+                                msg.parseMsgPayload(msgType, msgPayload);
+                                if (!compareBitfields(bitfield, msg.getMsgBitfield()))
+                                {
+                                    sendMessage(msg.createCUINMessage(2));
+                                }
+                                else
+                                {
+                                    sendMessage(msg.createCUINMessage(3));
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+
+
 
             }
             catch(ConnectException e){
@@ -259,8 +489,17 @@ public class peerProcess extends Thread{
                 try {
                     BufferedReader in = new BufferedReader(new FileReader("Common.cfg"));
                     while((st = in.readLine()) != null) {
-                         String[] tokens = st.split("\\s+");
-                         if (tokens[0].equals("FileName")) {
+                        String[] tokens = st.split("\\s+");
+                        if (tokens[0].equals("NumberOfPreferredNeighbors")) {
+                            peer.setNumOfPrefNeighbors(Integer.parseInt(tokens[1]));
+                        }
+                        else if (tokens[0].equals("UnchokingInterval")) {
+                            peer.setUnchokingInterval(Integer.parseInt(tokens[1]));
+                        }
+                        else if (tokens[0].equals("OptimisticUnchokingInterval")) {
+                            peer.setOptimUnchokingInterval(Integer.parseInt(tokens[1]));
+                        }
+                        else if (tokens[0].equals("FileName")) {
                              peer.setFileName(tokens[1]);
                          }else if (tokens[0].equals("FileSize")){
                              peer.setFileSize(Integer.parseInt(tokens[1]));
@@ -268,6 +507,7 @@ public class peerProcess extends Thread{
                             peer.setPieceSize(Integer.parseInt(tokens[1]));
                         }
                     }
+                    peer.setBitField();
                     in.close();
                     System.out.println(peer.toString());
                     peer.start();
@@ -280,6 +520,7 @@ public class peerProcess extends Thread{
                 for (int i = 0; i < stringArray.size(); i++){
                     hosts = stringArray.get(i);
                     clientPeer = new peerProcess(peerID, "clientPeer" + peerID, 2);
+                    clientPeer.setInitExpectedPeer(Integer.parseInt(hosts[0]));
                     clientPeer.setHostName(hosts[1]);
                     clientPeer.setSendingPort(Integer.parseInt(hosts[2]));
                     clientPeer.setHasFile(Integer.parseInt(hosts[3]));

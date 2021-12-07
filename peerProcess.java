@@ -19,7 +19,7 @@ public class peerProcess extends Thread {
     private boolean choked = false;
     private ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
     private HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
-    private Log log;
+    private static Log log;
     private String fileName = "";
     private int fileSize = 0;
     private int pieceSize = 0;
@@ -390,7 +390,6 @@ public class peerProcess extends Thread {
                 // Boolean badHeader = false;
                 out = new DataOutputStream(clientSocket.getOutputStream());
                 in = new DataInputStream(clientSocket.getInputStream());
-                Log log = new Log(peerId);
 
                 for (int i = 0; i < 32; i++) {
                     get_msg[i] = in.readByte();
@@ -497,7 +496,6 @@ public class peerProcess extends Thread {
                 // Wait for return Handshake and check for expected peerId
 
                 byte[] get_msg = new byte[32];
-                log = new Log(peerId);
 
                 for (int i = 0; i < 32; i++) {
                     get_msg[i] = in.readByte();
@@ -573,6 +571,13 @@ public class peerProcess extends Thread {
         if (args.length > 0) {  
             try {
                 peerID = Integer.parseInt(args[0]);
+                try {
+                    log = new Log(peerID);
+                }
+                catch (IOException e)
+                {
+                    //nothing
+                }
                 peerProcess peer = new peerProcess(peerID, "server_listener", 0);
                 try {
                     // Read in from PeerInfo

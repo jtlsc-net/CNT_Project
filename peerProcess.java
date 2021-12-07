@@ -21,6 +21,7 @@ public class peerProcess extends Thread {
     private static ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
     private static HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
     private static ArrayList<Integer> connectedPeerIds = new ArrayList<Integer>();
+    private static ArrayList<Integer> preferredNeighborArrayList = new ArrayList<Integer>();
     private static Log log;
     private String fileName = "";
     private int fileSize = 0;
@@ -258,13 +259,16 @@ public class peerProcess extends Thread {
     }
 
     public void reselectNeighbors() {
+        // NOte: we don't print message about choking/unchoking here.
+        // receiving peer prints those
+        // Except list of preferred neighbors
         if (hasFile == 1) { // if the current peer has the completed file randomly select neighbors
-            if (numOfPrefNeighbors >= connectedPeers.size()) { // if there are k or more connected neighbors
+            if (numOfPrefNeighbors <= peerInfo.size()) { // if there are k or more connected neighbors
                 int neighborsSelected = 0;
                 Random rand = new Random();
-                int upperbound = connectedPeers.size();
+                int upperbound = peerInfo.size();
                 ArrayList<Integer> selectedIndex = new ArrayList<>();
-                while (neighborsSelected != numOfPrefNeighbors) {
+                while (neighborsSelected < numOfPrefNeighbors) {
                     int index = rand.nextInt(upperbound);
                     if (!selectedIndex.contains(index)) {
                         selectedIndex.add(index);
@@ -272,56 +276,80 @@ public class peerProcess extends Thread {
                     }
                 }
                 try {
-                    for (int i = 0; i < connectedPeers.size(); i++) {
+                    for (int i = 0; i < peerInfo.size(); i++) {
                         if (selectedIndex.contains(i)) {
-                            peerInfo.get(i).unchoked = true;
-                            peerInfo.get(i).choked = false;
-                            connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
-                            log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                            if(peerInfo.get(i).unchoked == false){
+                                peerInfo.get(i).unchoked = true;
+                                peerInfo.get(i).choked = false;
+                                // Send message
+                                log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                                preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
+                            }
+                            // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
                         } else {
-                            peerInfo.get(i).unchoked = false;
-                            peerInfo.get(i).choked = true;
-                            connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
-                            log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                            if(peerInfo.get(i).unchoked == true){
+                                peerInfo.get(i).unchoked = false;
+                                peerInfo.get(i).choked = true;
+                                // Send message
+                                log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                                preferredNeighborArrayList.remove(peerInfo.get(i).peerInt);
+                            }
+                            // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
                         }
                     }
-                    optimisticallyUnchoke();
+                    log.WriteLog(peerId, preferredNeighborArrayList);
+                    //Fairly certain we calculate optimistic unchoking separately ~jlsc
+                    // optimisticallyUnchoke();
                 } catch (IOException e) {
                     System.out.println("Error writting logs during reselection.");
                 }
 
             } else {
                 try {
-                    for (int i = 0; i < connectedPeers.size(); i++) { // if there is less than k neighbors connected
-                        peerInfo.get(i).unchoked = true;
-                        peerInfo.get(i).choked = false;
-                        connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
-                        log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
-                        optimisticallyUnchoke();
+                    for (int i = 0; i < peerInfo.size(); i++) { // if there is less than k neighbors connected
+                        if(peerInfo.get(i).unchoked == false){
+                            peerInfo.get(i).unchoked = true;
+                            peerInfo.get(i).choked = false;
+                            // Send message
+                            log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                            preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
+                        }
+                        // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
+                        // optimisticallyUnchoke();
                     }
+                    log.WriteLog(peerId, preferredNeighborArrayList);
                 } catch (Exception e) {
                     System.out.println("Error writting logs during reselection.");
                 }
             }
         } else {
+            //Works backwards right now
             Collections.sort(peerInfo, downloadRates); // find the highest sorting rates
             int neighborsSelected = 0;
             try {
                 for (int i = 0; i < peerInfo.size(); i++) {
                     if (neighborsSelected < numOfPrefNeighbors) { // unchoke the k neighbors with highest sorting rates
-                        peerInfo.get(i).unchoked = true;
-                        peerInfo.get(i).choked = false;
+                        if(peerInfo.get(i).unchoked == false){ 
+                            peerInfo.get(i).unchoked = true;
+                            peerInfo.get(i).choked = false;
+                            //Send message
+                            // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
+                            log.WriteLog(3, peerId, peerInfo.get(i).peerInt + 50);
+                            log.WriteLog(peerId, "random val " + Integer.toString(peerInfo.get(i).piecesDownloaded));
+                        }
                         neighborsSelected += 1;
-                        connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
-                        log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
                     } else { // choke others
-                        peerInfo.get(i).unchoked = false;
-                        peerInfo.get(i).choked = true;
-                        connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
-                        log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                        if(peerInfo.get(i).unchoked == true){
+                            peerInfo.get(i).unchoked = false;
+                            peerInfo.get(i).choked = true;
+                            // Send message
+                            // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
+                            log.WriteLog(2, peerId, peerInfo.get(i).peerInt + 50);
+                            log.WriteLog(peerId, "random val " + Integer.toString(peerInfo.get(i).piecesDownloaded));
+                        }  
                     }
                 }
-                optimisticallyUnchoke();
+                // optimisticallyUnchoke();
 
             } catch (Exception e) {
                 System.out.println("Error writting logs during reselection.");
@@ -331,20 +359,22 @@ public class peerProcess extends Thread {
 
     public void optimisticallyUnchoke() { // returns the peerID of the neighbor to get choked
         try{
-        Random rand = new Random();
-        ArrayList<RemotePeerInfo> chokedPeers = new ArrayList<>();
-        for (int i = 0; i < peerInfo.size(); i++) {
-            if (peerInfo.get(i).choked) {
-                chokedPeers.add(peerInfo.get(i));
+            Random rand = new Random();
+            ArrayList<RemotePeerInfo> chokedPeers = new ArrayList<>();
+            for (int i = 0; i < peerInfo.size(); i++) {
+                if (peerInfo.get(i).choked) {
+                    chokedPeers.add(peerInfo.get(i));
+                }
             }
-        }
-        int upperbound = chokedPeers.size();
-        int index = rand.nextInt(upperbound);
-        RemotePeerInfo selected = chokedPeers.get(index);
-        selected.optimisticallyUnchoked = true;
-        selected.choked = false;
-        selected.unchoked = false;
-        // connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
+            int upperbound = chokedPeers.size();
+            // Code fails here and throws IllegalArgumentException if upperbound <1.
+            // (i.e. when the process is first started.)
+            int index = rand.nextInt(upperbound);
+            RemotePeerInfo selected = chokedPeers.get(index);
+            selected.optimisticallyUnchoked = true;
+            selected.choked = false;
+            selected.unchoked = false;
+            // connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
         
             log.WriteLog(6, peerId, selected.peerInt);
         } catch(IllegalArgumentException q){
@@ -579,14 +609,14 @@ public class peerProcess extends Thread {
         }
         if(threadType == 3){
             boolean waitUpdate = true;
-            // Handle unchoke
+            // Handle preferred neighbors
             // First while loop is for making sure that peerInfo gets populated
             // Second while loop is for normal ops
             try{
                 Thread.sleep(unchokingInterval * 1000);
                 while(waitUpdate){
                     try{
-                        log.WriteLog(peerId, peerInfo.get(0).getPeerId());
+                        reselectNeighbors();
                         waitUpdate = false;
                     }catch(IndexOutOfBoundsException e){
                         try{
@@ -612,11 +642,9 @@ public class peerProcess extends Thread {
             while(true){
                 try{
                     Thread.sleep(unchokingInterval * 1000);
-                    log.WriteLog(peerId, " " + peerInfo.get(0).getPeerId());
+                    reselectNeighbors();
                 }catch(InterruptedException a){
                     //lol
-                }catch(IOException e){
-                    //hahah
                 }
 
             }

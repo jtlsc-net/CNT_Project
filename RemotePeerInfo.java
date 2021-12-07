@@ -7,6 +7,8 @@
  * It is your responsibility to adapt this program to your running environment.
  */
 
+import java.util.*;
+
 public class RemotePeerInfo {
 	public String peerId;
 	public String peerAddress;
@@ -27,6 +29,8 @@ public class RemotePeerInfo {
 		}
 		peerAddress = pAddress;
 		peerPort = pPort;
+		Random rand = new Random();
+		piecesDownloaded = rand.nextInt(4);
 	}
 
 	public String getPeerId(){

@@ -33,7 +33,7 @@ public class peerProcess extends Thread {
     private Message msg = new Message(); // Singleton-like object, to create all messages and check handshake
     private byte[][] filePieces;
     private int[] bitfield;
-    private File output;
+    public String outputPath;
     private int initExpectedPeer;
     public static byte[] header = "P2PFILESHARINGPROJ".getBytes();
     private static Comparator<RemotePeerInfo> downloadRates=new Comparator<RemotePeerInfo>(){@Override public int compare(RemotePeerInfo b1,RemotePeerInfo b2){return Integer.compare(b1.getPiecesDownloaded(),b2.getPiecesDownloaded());}};
@@ -142,16 +142,22 @@ public class peerProcess extends Thread {
     public void writePieces() {
         byte[] reconstructedFile = new byte[fileSize];
         ByteArrayOutputStream os = new ByteArrayOutputStream();
-
+        int i = 0;
         for (byte[] b : filePieces) {
-            os.write(b, 0, b.length);
+            for(byte piece : b){
+                reconstructedFile[i] = piece;
+                i+=1;
+            }
         }
-        reconstructedFile = os.toByteArray();
         // System.out.println("There are " + length + "bytes in the reconstructed
         // file");
         File newFile = new File(output.getAbsolutePath() + "/RECONSTRUCTED" + fileName);
         try {
-            Files.write(newFile.toPath(), reconstructedFile);
+            FileOutputStream file = new FileOutputStream(output.getAbsolutePath() + "/" + fileName);
+            BufferedOutputStream bos = new BufferedOutputStream(file);
+            bos.write(reconstructedFile);
+            bos.close();
+            file.close();
         } catch (IOException e) {
 
             e.printStackTrace();
@@ -167,32 +173,29 @@ public class peerProcess extends Thread {
             // break the file down into number of pieces
             int piece = 0;
             filePieces = new byte[totalPieces][];
-            output = new File("peer_" + peerId);
-            if (output.exists() == false) {
-                output.mkdir();
-            }
+        
 
             try {
-                File f = new File(output.getAbsolutePath() + "/" + fileName);
-                byte[] completeFile = Files.readAllBytes(f.toPath());
-                // System.out.println(new String(completeFile));
-                int pieceBegin = 0;
-                int pieceEnd = 0;
-                // File newFile = new File(output.getAbsolutePath() + "/RECONSTRUCTED" +
-                // fileName);
+                //File f = new File(output.getAbsolutePath() + "/" + fileName);
+                BufferedInputStream file = new BufferedInputStream(new FileInputStream(output.getAbsolutePath() + "/" + fileName));
+                byte[] completeFile = new byte[fileSize];
+                file.read(completeFile);
+                file.close();
+           
+                int pieceBegin = 0; 
+                int pieceEnd = 0; //ending index of a piece to be extracted
+                
+                //Arrays.copyofRange(source,inclusive start pos, exclusive end pos)
 
-                // Files.write(newFile.toPath(), completeFile);
+                for (int i = 0; i < totalPieces; i++) { //loop to collect all pieces required for the file (fileSize/pieceSize)
+                    if (i == totalPieces - 1) { // if the current piece is the last piece necessary
+                        filePieces[i] = Arrays.copyOfRange(completeFile, pieceBegin, fileSize); // copy the bytes from the point where the last piece ended up to the fileSize (this accounts for pieces smaller than the standard piece size)
+                        
 
-                for (int i = 0; i < totalPieces; i++) {
-                    if (i == totalPieces - 1) {
-                        filePieces[i] = Arrays.copyOfRange(completeFile, pieceBegin, fileSize);
-                        // System.out.println(new String(filePieces[i]));
-
-                    } else if (pieceBegin + pieceSize <= fileSize) {
-                        pieceEnd = pieceBegin + pieceSize;
-                        filePieces[i] = Arrays.copyOfRange(completeFile, pieceBegin, pieceEnd);
-                        // System.out.println(new String(filePieces[i]));
-                        pieceBegin = pieceEnd;
+                    } else if (pieceBegin + pieceSize <= fileSize) { // if the current piece is not the last
+                        pieceEnd = pieceBegin + pieceSize; // find the new pieceEnd
+                        filePieces[i] = Arrays.copyOfRange(completeFile, pieceBegin, pieceEnd); //copy the bytes from pieceEnd to piece Begin
+                        pieceBegin = pieceEnd; 
 
                     }
 
@@ -627,7 +630,9 @@ public class peerProcess extends Thread {
                             peer.setPieceSize(Integer.parseInt(tokens[1]));
                         }
                     }
+                    peer.outputPath = "peer_" + peerID + "/";
                     peer.setBitField();
+                    peer.writePieces();
                     in.close();
                     System.out.println(peer.toString());
                     peer.start();

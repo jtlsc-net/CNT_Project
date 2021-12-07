@@ -23,7 +23,11 @@ public class Log {
     //Makes file for logging with peerID
     private void MakeLogFile(int peerID) throws IOException{
         try{
-            String new_file_name = "log_peer_" + peerID + ".log";
+            File dir = new File("peer_" + peerID);
+            if (dir.exists() == false) {
+                dir.mkdir();
+            }
+            String new_file_name = dir.getAbsolutePath() + "/" +"log_peer_" + peerID + ".log";
             File file = new File(new_file_name);
             file.createNewFile();
             FileWriter fw = new FileWriter(file);

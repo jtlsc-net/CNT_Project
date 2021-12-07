@@ -207,9 +207,21 @@ public class peerProcess extends Thread {
     }
 
     public boolean checkZerosArray(int[] bitfield) {
-        for (int i = 0; i < bitfield.length; i++) {
-            if (bitfield[i] != 0) {
-                return false;
+        try {
+            for (int i = 0; i < bitfield.length; i++) {
+                if (bitfield[i] != 0) {
+                    return false;
+                }
+            }
+        }
+        catch(Exception e)
+        {
+            try {
+                log.WriteLog(peerId, "Checkzero broken");
+            }
+            catch (Exception j)
+            {
+                //lol
             }
         }
         return true;
@@ -370,6 +382,7 @@ public class peerProcess extends Thread {
                         clientReceived.setFileSize(fileSize);
                         clientReceived.setPieceSize(pieceSize);
                         clientReceived.setClientSocket(connectedSocket);
+                        clientReceived.setBitField();
                         clientReceived.start();
                     }
                 } finally {
@@ -387,7 +400,7 @@ public class peerProcess extends Thread {
                 byte[] get_msg = new byte[32];
                 byte[] remotePeerBytes = new byte[4];
                 int remotePeer;
-                // Boolean badHeader = false;
+
                 out = new DataOutputStream(clientSocket.getOutputStream());
                 in = new DataInputStream(clientSocket.getInputStream());
 
@@ -404,61 +417,50 @@ public class peerProcess extends Thread {
                 }
 
                 sendMessage(msg.createHandshakeMessage(peerId));
-                // Checks if connection was terminated
-                if (in.read() == -1)
-                    clientSocket.close();
-                else {
-                    if (!checkZerosArray(bitfield)) {
-                        sendMessage(msg.createBitFieldMessage(bitfield));
-                    }
-                    boolean allPeersDone = false; // Replace condition (This is temp solution)
-                    while (!allPeersDone) {
-                        int msgLength = in.readInt();
-                        byte msgType = in.readByte();
-                        byte[] msgPayload = new byte[msgLength - 1];
-                        in.readFully(msgPayload);
-                        switch (msgType) {
-                            case 0:
-                                break;
-                            case 1:
-                                break;
-                            case 2:
-                                log.WriteLog(4, peerId, initExpectedPeer);
-                                allPeersDone = true;
-                                break;
-                            case 3:
-                                log.WriteLog(5, peerId, initExpectedPeer);
-                                allPeersDone = true;
-                                break;
-                            case 4:
-                                break;
-                            case 5:
-                                msg.parseMsgPayload(msgType, msgPayload);
-                                if (!compareBitfields(bitfield, msg.getMsgBitfield())) {
-                                    sendMessage(msg.createCUINMessage(2));
-                                } else {
-                                    sendMessage(msg.createCUINMessage(3));
-                                }
-                                break;
-                            default:
-                                break;
-                        }
+                boolean check = checkZerosArray(bitfield);
+                log.WriteLog(peerId, "hey check zeros does work");
+                if (!checkZerosArray(bitfield)) {
+                    sendMessage(msg.createBitFieldMessage(bitfield));
+                    log.WriteLog(peerId, "hey we have bitfield");
+                }
+                log.WriteLog(peerId, "BITFIELD PASSED");
+                boolean allPeersDone = false; // Replace condition (This is temp solution)
+                //This loop for all messages transactions
+                while (!allPeersDone) {
+                    int msgLength = in.readInt();
+                    byte msgType = in.readByte();
+                    byte[] msgPayload = new byte[msgLength - 1];
+                    in.readFully(msgPayload);
+                    log.WriteLog(peerId, "Got the message");
+                    switch (msgType) {
+                        case 0:
+                            break;
+                        case 1:
+                            break;
+                        case 2:
+                            log.WriteLog(4, peerId, initExpectedPeer);
+                            allPeersDone = true;
+                            break;
+                        case 3:
+                            log.WriteLog(5, peerId, initExpectedPeer);
+                            allPeersDone = true;
+                            break;
+                        case 4:
+                            break;
+                        case 5:
+                            msg.parseMsgPayload(msgType, msgPayload);
+                            ArrayList<Integer> missing = findMissingPieces(bitfield, msg.getMsgBitfield());
+                            if (missing.size() > 0) {
+                                sendMessage(msg.createCUINMessage(2));
+                            } else {
+                                sendMessage(msg.createCUINMessage(3));
+                            }
+                            break;
+                        default:
+                            break;
                     }
                 }
 
-                // for(int z = 0; z < 18; z++){
-                // if (header[z] != get_msg[z]){
-                // log.WriteLog(6, peerId, 0);
-                // badHeader = true;
-                // }
-                // }
-                // if(!badHeader){
-                // for(int j = 28; j < 32; j++){
-                // remotePeerBytes[j-28] = get_msg[j];
-                // }
-                // remotePeer = ByteBuffer.wrap(remotePeerBytes).getInt();
-                // log.WriteLog(1, peerId, remotePeer);
-                // }
 
             } catch (IOException e) {
                 // lol
@@ -469,29 +471,11 @@ public class peerProcess extends Thread {
         if (threadType == 2) {
             // Do client seek ops.
             try {
-                // byte[] handshakeBytesFirstField = "P2PFILESHARINGPROJ".getBytes();
-                // byte[] handshakeMessage = new byte[32];
-                // byte[] peerIdBytes = ByteBuffer.allocate(4).putInt(peerId).array();
-
                 serverSocket = new Socket(hostName, sendingPort);
                 out = new DataOutputStream(serverSocket.getOutputStream());
                 in = new DataInputStream(serverSocket.getInputStream());
 
-                // for(int i = 0; i < 18; i++){
-                // handshakeMessage[i] = handshakeBytesFirstField[i];
-                // }
-                // for(int j = 18; j < 28; j++)
-                // {
-                // handshakeMessage[j] = 0;
-                // }
-                // for(int k = 28; k < 32; k++)
-                // {
-                // handshakeMessage[k] = peerIdBytes[k-28];
-                // }
-
-                // String q = new String(handshakeMessage, StandardCharsets.UTF_8);
                 sendMessage(msg.createHandshakeMessage(peerId));
-                // sendMessage(handshakeMessage);
 
                 // Wait for return Handshake and check for expected peerId
 
@@ -502,46 +486,56 @@ public class peerProcess extends Thread {
                 }
 
                 // Checks for return handshake if incorrect peer
-                if (!msg.checkHandshake(get_msg, initExpectedPeer)) {
+                if (!(msg.checkHandshake(get_msg, initExpectedPeer))) {
+                    log.WriteLog(peerId, "closing connection because not peer " + initExpectedPeer);
                     serverSocket.close();
-                } else {
-                    if (!checkZerosArray(bitfield)) {
-                        sendMessage(msg.createBitFieldMessage(bitfield));
-                    }
-                    boolean allPeersDone = false; // Replace condition (This is temp solution)
-                    while (!allPeersDone) {
-                        int msgLength = in.readInt();
-                        byte msgType = in.readByte();
-                        byte[] msgPayload = new byte[msgLength - 1];
-                        in.readFully(msgPayload);
-                        switch (msgType) {
-                            case 0:
-                                break;
-                            case 1:
-                                break;
-                            case 2:
-                                log.WriteLog(4, peerId, initExpectedPeer);
-                                allPeersDone = true;
-                                break;
-                            case 3:
-                                log.WriteLog(5, peerId, initExpectedPeer);
-                                allPeersDone = true;
-                                break;
-                            case 4:
-                                break;
-                            case 5:
-                                msg.parseMsgPayload(msgType, msgPayload);
-                                if (!compareBitfields(bitfield, msg.getMsgBitfield())) {
-                                    sendMessage(msg.createCUINMessage(2));
-                                } else {
-                                    sendMessage(msg.createCUINMessage(3));
-                                }
-                                break;
-                            default:
-                                break;
-                        }
+                }
+                log.WriteLog(0, peerId, initExpectedPeer);
+                boolean check = checkZerosArray(bitfield);
+                log.WriteLog(peerId, "hey check zeros does work");
+                if (!checkZerosArray(bitfield)) {
+                    sendMessage(msg.createBitFieldMessage(bitfield));
+                    log.WriteLog(peerId, "hey we have bitfield");
+                }
+                log.WriteLog(peerId, "BITFIELD PASSED");
+                boolean allPeersDone = false; // Replace condition (This is temp solution)
+                while (!allPeersDone)
+                {
+                    int msgLength = in.readInt();
+                    byte msgType = in.readByte();
+                    byte[] msgPayload = new byte[msgLength - 1];
+                    in.readFully(msgPayload);
+                    log.WriteLog(peerId, "Got the message");
+                    switch (msgType)
+                    {
+                        case 0:
+                            break;
+                        case 1:
+                            break;
+                        case 2:
+                            log.WriteLog(4, peerId, initExpectedPeer);
+                            allPeersDone = true;
+                            break;
+                        case 3:
+                            log.WriteLog(5, peerId, initExpectedPeer);
+                            allPeersDone = true;
+                            break;
+                        case 4:
+                            break;
+                        case 5:
+                            msg.parseMsgPayload(msgType, msgPayload);
+                            ArrayList<Integer> missing = findMissingPieces(bitfield, msg.getMsgBitfield());
+                            if (missing.size() > 0) {
+                                sendMessage(msg.createCUINMessage(2));
+                            } else {
+                                sendMessage(msg.createCUINMessage(3));
+                            }
+                            break;
+                        default:
+                            break;
                     }
                 }
+
 
             } catch (ConnectException e) {
                 System.err.println(e);
@@ -643,7 +637,11 @@ public class peerProcess extends Thread {
                     clientPeer.setInitExpectedPeer(Integer.parseInt(hosts[0]));
                     clientPeer.setHostName(hosts[1]);
                     clientPeer.setSendingPort(Integer.parseInt(hosts[2]));
-                    clientPeer.setHasFile(Integer.parseInt(hosts[3]));
+                    clientPeer.setHasFile(peer.getHasFile());
+                    clientPeer.setFileSize(peer.getFileSize());
+                    clientPeer.setPieceSize(peer.getPieceSize());
+                    clientPeer.setFileName(peer.getFileName());
+                    clientPeer.setBitField();
                     clientPeer.start();
                 }
             } catch (NumberFormatException e) {

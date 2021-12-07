@@ -74,7 +74,7 @@ public class StartRemotePeers {
 				else if(args.length == 1){
 					Runtime.getRuntime().exec("ssh " + user + "@" + pInfo.peerAddress + " cd ~/project; java peerProcess " + pInfo.peerId);
 				}
-				TimeUnit.SECONDS.sleep(1);
+				//TimeUnit.SECONDS.sleep(1);
 				
 				// If your program is C/C++, use this line instead of the above line. 
 				//Runtime.getRuntime().exec("ssh " + pInfo.peerAddress + " cd " + path + "; ./peerProcess " + pInfo.peerId);

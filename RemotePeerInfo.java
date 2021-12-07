@@ -28,6 +28,10 @@ public class RemotePeerInfo {
 		peerAddress = pAddress;
 		peerPort = pPort;
 	}
+
+	public String getPeerId(){
+		return peerId;
+	}
 	
     public int getPiecesDownloaded() {
 		return piecesDownloaded;

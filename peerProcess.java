@@ -4,6 +4,7 @@ import java.util.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.*;
 
 public class peerProcess extends Thread {
     private int peerId;
@@ -17,8 +18,9 @@ public class peerProcess extends Thread {
     private boolean optimisticallyUnchoked;
     private boolean unchoked = false;
     private boolean choked = false;
-    private ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
-    private HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
+    private static ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
+    private static HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
+    private static ArrayList<Integer> connectedPeerIds = new ArrayList<Integer>();
     private static Log log;
     private String fileName = "";
     private int fileSize = 0;
@@ -106,6 +108,10 @@ public class peerProcess extends Thread {
 
     public int getHasFile() {
         return hasFile;
+    }
+
+    public int getNumOfPrefNeighbors(){
+        return numOfPrefNeighbors;
     }
 
     public String getFileName() {
@@ -412,6 +418,8 @@ public class peerProcess extends Thread {
                     remotePeer = ByteBuffer.wrap(Arrays.copyOfRange(get_msg, 28, 32)).getInt();
                     log.WriteLog(1, peerId, remotePeer);
                     initExpectedPeer = remotePeer;
+                    RemotePeerInfo rPI = new RemotePeerInfo(Integer.toString(remotePeer), "a", "a");  //I think this stuff isn't needed?
+                    peerInfo.add(rPI);
                 } else {
                     clientSocket.close();
                 }
@@ -464,6 +472,11 @@ public class peerProcess extends Thread {
 
             } catch (IOException e) {
                 // lol
+                try{
+                    log.WriteLog(peerId, "There was a problem with the loop.");
+                }catch(IOException f){
+                    //lol
+                }
             }
 
         }
@@ -471,7 +484,15 @@ public class peerProcess extends Thread {
         if (threadType == 2) {
             // Do client seek ops.
             try {
-                serverSocket = new Socket(hostName, sendingPort);
+                while(serverSocket == null){
+                    try{
+                        serverSocket = new Socket(hostName, sendingPort);
+                    }
+                    catch(Exception e){
+                        //lol
+                    }
+                }
+                
                 out = new DataOutputStream(serverSocket.getOutputStream());
                 in = new DataInputStream(serverSocket.getInputStream());
 
@@ -491,6 +512,10 @@ public class peerProcess extends Thread {
                     serverSocket.close();
                 }
                 log.WriteLog(0, peerId, initExpectedPeer);
+                RemotePeerInfo rPI = new RemotePeerInfo(Integer.toString(initExpectedPeer), hostName, Integer.toString(sendingPort));
+                peerInfo.add(rPI);
+                log.WriteLog(peerId, "Wrote to peerinfo");
+                // connectedPeerIds.add(initExpectedPeer);
                 boolean check = checkZerosArray(bitfield);
                 log.WriteLog(peerId, "hey check zeros does work");
                 if (!checkZerosArray(bitfield)) {
@@ -546,6 +571,62 @@ public class peerProcess extends Thread {
                     serverSocket.close();
                 } catch (IOException e) {
                     System.err.println(e);
+                }
+            }
+        }
+        if(threadType == 3){
+            boolean waitUpdate = true;
+            // Handle unchoke
+            try{
+                Thread.sleep(unchokingInterval * 1000);
+                while(waitUpdate){
+                    try{
+                        log.WriteLog(peerId, peerInfo.get(0).getPeerId());
+                        waitUpdate = false;
+                    }catch(IndexOutOfBoundsException e){
+                        try{
+                            log.WriteLog(peerId, "Index out");
+                        }catch(IOException g){
+                            //aayyy
+                        }
+                    }catch(Throwable t){
+                        try{
+                            log.WriteLog(peerId, "Throwable out");
+                        }
+                        catch(IOException g){
+                            //yhafui
+                        }
+                        //lol
+                    }
+                }
+            }catch(InterruptedException a){
+                //lol
+            // }catch(IOException e){
+            //     //lol more
+            }
+            while(true){
+                try{
+                    Thread.sleep(unchokingInterval * 1000);
+                    log.WriteLog(peerId, " " + peerInfo.get(0).getPeerId());
+                }catch(InterruptedException a){
+                    //lol
+                }catch(IOException e){
+                    //hahah
+                }
+
+            }
+        }
+        if(threadType == 4){
+            // Handle optimistic unchoke
+            while(true){
+                try{
+                    Thread.sleep(optimisticUnchokingInterval * 1000);
+                    // optimisticallyUnchoke();
+                    log.WriteLog(peerId, "optimal");
+                } catch(InterruptedException a){
+                    //lol again
+                }catch(IOException e){
+                    //lol again more
                 }
             }
         }
@@ -644,6 +725,22 @@ public class peerProcess extends Thread {
                     clientPeer.setBitField();
                     clientPeer.start();
                 }
+                peerProcess unchokeThread = new peerProcess(peerID, "unchokeThread", 3);
+                peerProcess optUnchokeThread = new peerProcess(peerID, "optUnchokeThread", 4);
+                unchokeThread.setUnchokingInterval(peer.unchokingInterval);
+                unchokeThread.setHasFile(peer.getHasFile());
+                unchokeThread.setNumOfPrefNeighbors(peer.getNumOfPrefNeighbors());
+                optUnchokeThread.setOptimisticUnchokingInterval(peer.optimisticUnchokingInterval);
+                optUnchokeThread.setHasFile(peer.getHasFile());
+                optUnchokeThread.setNumOfPrefNeighbors(peer.getNumOfPrefNeighbors());
+                unchokeThread.start();
+                optUnchokeThread.start();
+
+                // Infinite while looking for done.
+                // while(notDone){
+                //     // wait 1 sec.
+                //     Thread.sleep(1000);
+                // }
             } catch (NumberFormatException e) {
                 System.err.println("Argument" + args[0] + " must be an integer.");
                 System.exit(1);

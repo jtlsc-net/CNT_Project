@@ -330,6 +330,7 @@ public class peerProcess extends Thread {
     }
 
     public void optimisticallyUnchoke() { // returns the peerID of the neighbor to get choked
+        try{
         Random rand = new Random();
         ArrayList<RemotePeerInfo> chokedPeers = new ArrayList<>();
         for (int i = 0; i < peerInfo.size(); i++) {
@@ -343,10 +344,12 @@ public class peerProcess extends Thread {
         selected.optimisticallyUnchoked = true;
         selected.choked = false;
         selected.unchoked = false;
-        connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
-        try {
-            log.WriteLog(3, peerId, selected.peerInt);
-        } catch (Exception e) {
+        // connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
+        
+            log.WriteLog(6, peerId, selected.peerInt);
+        } catch(IllegalArgumentException q){
+            throw q;
+        }catch (Exception e) {
             System.out.println("Error writting log during optimistic unchoke.");
         }
     }
@@ -577,6 +580,8 @@ public class peerProcess extends Thread {
         if(threadType == 3){
             boolean waitUpdate = true;
             // Handle unchoke
+            // First while loop is for making sure that peerInfo gets populated
+            // Second while loop is for normal ops
             try{
                 Thread.sleep(unchokingInterval * 1000);
                 while(waitUpdate){
@@ -618,11 +623,31 @@ public class peerProcess extends Thread {
         }
         if(threadType == 4){
             // Handle optimistic unchoke
+            boolean waitFirstUpdate = true;
+            try{
+                Thread.sleep(optimisticUnchokingInterval * 1000);
+                while(waitFirstUpdate){
+                    try{
+                        optimisticallyUnchoke();
+                        waitFirstUpdate = false;
+                    }
+                    catch(IllegalArgumentException e){
+                        // Expected if there is no choked peerId.
+                    }
+                }
+            }
+            catch(InterruptedException a){
+                //nah
+            }
             while(true){
                 try{
                     Thread.sleep(optimisticUnchokingInterval * 1000);
-                    // optimisticallyUnchoke();
-                    log.WriteLog(peerId, "optimal");
+                    optimisticallyUnchoke();
+                    for(int i = 0; i < peerInfo.size(); i++){
+                        if(peerInfo.get(i).optimisticallyUnchoked){
+                            log.WriteLog(peerId, String.valueOf(peerInfo.get(i).optimisticallyUnchoked));
+                        }
+                    }
                 } catch(InterruptedException a){
                     //lol again
                 }catch(IOException e){

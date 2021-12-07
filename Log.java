@@ -23,11 +23,7 @@ public class Log {
     //Makes file for logging with peerID
     private void MakeLogFile(int peerID) throws IOException{
         try{
-            File dir = new File("peer_" + peerID);
-            if (dir.exists() == false) {
-                dir.mkdir();
-            }
-            String new_file_name = dir.getAbsolutePath() + "/" +"log_peer_" + peerID + ".log";
+            String new_file_name = "log_peer_" + peerID + ".log";
             File file = new File(new_file_name);
             file.createNewFile();
             FileWriter fw = new FileWriter(file);
@@ -92,6 +88,7 @@ public class Log {
             case 6: // change of optimistically unchoked neighbor
             log_string = dtf.format(now) + ": Peer " + selfID + " has the optimistically unchoked neighbor " + otherID + ".";
             break;
+            case 7: // 
             default: log_string = dtf.format(now) + ": Invalid Message type, switchy boi";
             break;
         }
@@ -176,6 +173,20 @@ public class Log {
         }
     }
 
+    public void WriteLog(int selfID, String msg) throws IOException 
+    {
+        LocalDateTime now = LocalDateTime.now();
+        String log_string;
+        log_string = dtf.format(now) + ": Peer " + selfID + msg;
+        try{
+            bw.write(log_string);
+            bw.newLine();
+            bw.flush();
+        }
+        catch(IOException e){
+            throw e;
+        }
+    }
     // Uncomment below code for testing.
 
     // public static void main(String args[]){

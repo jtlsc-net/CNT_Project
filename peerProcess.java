@@ -477,6 +477,7 @@ public class peerProcess extends Thread {
                         case 0:
                             break;
                         case 1:
+                            log.WriteLog(peerId, "OH BOY I GOT UNCHOKED YEAHHHH");
                             break;
                         case 2:
                             log.WriteLog(4, peerId, initExpectedPeer);

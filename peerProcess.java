@@ -366,7 +366,7 @@ public class peerProcess extends Thread {
             Random rand = new Random();
             ArrayList<RemotePeerInfo> chokedPeers = new ArrayList<>();
             for (int i = 0; i < peerInfo.size(); i++) {
-                if (peerInfo.get(i).choked) {
+                if (peerInfo.get(i).choked == true || peerInfo.get(i).unchoked == false) {
                     chokedPeers.add(peerInfo.get(i));
                 }
             }
@@ -658,16 +658,24 @@ public class peerProcess extends Thread {
                     }
                 }
             }catch(InterruptedException a){
+                try{
+                    log.WriteLog(peerId, "INTERRUPT ME IS");
+                }catch(IOException e){
+                    //aayyyy
+                }
                 //lol
             // }catch(IOException e){
             //     //lol more
             }
             while(true){
                 try{
+                    log.WriteLog(peerId, "MADE IT TO END 3 BABYYY");
                     Thread.sleep(unchokingInterval * 1000);
                     reselectNeighbors();
                 }catch(InterruptedException a){
                     //lol
+                }catch(IOException e){
+                    //fff
                 }
 
             }
@@ -684,6 +692,12 @@ public class peerProcess extends Thread {
                     }
                     catch(IllegalArgumentException e){
                         // Expected if there is no choked peerId.
+                        try{
+                            log.WriteLog(peerId, "THERES A GARDEN IN THE WINDO AND ILLEGAL ARGUMENT");
+                        }
+                        catch(IOException f){
+                            //
+                        }
                     }
                 }
             }
@@ -692,6 +706,7 @@ public class peerProcess extends Thread {
             }
             while(true){
                 try{
+                    log.WriteLog(peerId, "MADE IT TO END 4 BABBYYYYY");
                     Thread.sleep(optimisticUnchokingInterval * 1000);
                     optimisticallyUnchoke();
                     for(int i = 0; i < peerInfo.size(); i++){

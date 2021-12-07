@@ -1,2 +1,4 @@
 *.class
 output.dat
+killscript
+addCompile.sh

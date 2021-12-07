@@ -22,6 +22,7 @@ public class peerProcess extends Thread {
     private static HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
     private static ArrayList<Integer> connectedPeerIds = new ArrayList<Integer>();
     private static ArrayList<Integer> preferredNeighborArrayList = new ArrayList<Integer>();
+    private static Queue<Tuple> allChokeMessages = new LinkedList<Tuple>();
     private static Log log;
     private String fileName = "";
     private int fileSize = 0;
@@ -283,6 +284,7 @@ public class peerProcess extends Thread {
                                 peerInfo.get(i).choked = false;
                                 // Send message
                                 log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                                allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
                                 preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
                             }
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
@@ -292,6 +294,7 @@ public class peerProcess extends Thread {
                                 peerInfo.get(i).choked = true;
                                 // Send message
                                 log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                                allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
                                 preferredNeighborArrayList.remove(peerInfo.get(i).peerInt);
                             }
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
@@ -312,6 +315,7 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = false;
                             // Send message
                             log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                            allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
                             preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
                         }
                         // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
@@ -377,6 +381,7 @@ public class peerProcess extends Thread {
             // connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
         
             log.WriteLog(6, peerId, selected.peerInt);
+            allChokeMessages.add(new Tuple(selected.peerInt, msg.createCUINMessage(1)));
         } catch(IllegalArgumentException q){
             throw q;
         }catch (Exception e) {
@@ -468,6 +473,13 @@ public class peerProcess extends Thread {
                 boolean allPeersDone = false; // Replace condition (This is temp solution)
                 //This loop for all messages transactions
                 while (!allPeersDone) {
+                    if (!allChokeMessages.isEmpty()) {
+                        log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 1");
+                        if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
+                            sendMessage(allChokeMessages.poll().getMessage());
+                            log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 1");
+                        }
+                    }
                     int msgLength = in.readInt();
                     byte msgType = in.readByte();
                     byte[] msgPayload = new byte[msgLength - 1];
@@ -475,6 +487,7 @@ public class peerProcess extends Thread {
                     log.WriteLog(peerId, "Got the message");
                     switch (msgType) {
                         case 0:
+                            log.WriteLog(peerId, "I HATE BEING CHOKED!");
                             break;
                         case 1:
                             log.WriteLog(peerId, "OH BOY I GOT UNCHOKED YEAHHHH");
@@ -560,6 +573,13 @@ public class peerProcess extends Thread {
                 boolean allPeersDone = false; // Replace condition (This is temp solution)
                 while (!allPeersDone)
                 {
+                    if (!allChokeMessages.isEmpty()) {
+                        log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 2");
+                        if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
+                            sendMessage(allChokeMessages.poll().getMessage());
+                            log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 2");
+                        }
+                    }
                     int msgLength = in.readInt();
                     byte msgType = in.readByte();
                     byte[] msgPayload = new byte[msgLength - 1];
@@ -568,8 +588,10 @@ public class peerProcess extends Thread {
                     switch (msgType)
                     {
                         case 0:
+                            log.WriteLog(peerId, "I HATE BEING CHOKED!");
                             break;
                         case 1:
+                            log.WriteLog(peerId, "OH BOY I GOT UNCHOKED YEAHHHH");
                             break;
                         case 2:
                             log.WriteLog(4, peerId, initExpectedPeer);

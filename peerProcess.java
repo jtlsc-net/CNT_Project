@@ -1,6 +1,7 @@
 import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.atomic.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -18,11 +19,15 @@ public class peerProcess extends Thread {
     private boolean optimisticallyUnchoked;
     private boolean unchoked = false;
     private boolean choked = false;
+    AtomicBoolean messageToSend = new AtomicBoolean(false);
     private static ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
     private static HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
     private static ArrayList<Integer> connectedPeerIds = new ArrayList<Integer>();
     private static ArrayList<Integer> preferredNeighborArrayList = new ArrayList<Integer>();
     private static Queue<Tuple> allChokeMessages = new LinkedList<Tuple>();
+    private static ArrayList<Tuple> CorUchokeMessages = new ArrayList<Tuple>();
+    private static Map<Integer,Socket> clientSockets = new HashMap<Integer,Socket>();
+    private static Map<Integer,Socket> serverSockets = new HashMap<Integer,Socket>();
     private static Log log;
     private String fileName = "";
     private int fileSize = 0;
@@ -212,6 +217,7 @@ public class peerProcess extends Thread {
         } else {
             Arrays.fill(bitfield, 0);
         }
+        messageToSend.set(true);
     }
 
     public boolean checkZerosArray(int[] bitfield) {
@@ -284,7 +290,7 @@ public class peerProcess extends Thread {
                                 peerInfo.get(i).choked = false;
                                 // Send message
                                 log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
-                                allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
+                                CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
                                 preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
                             }
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
@@ -294,7 +300,7 @@ public class peerProcess extends Thread {
                                 peerInfo.get(i).choked = true;
                                 // Send message
                                 log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
-                                allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
+                                CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
                                 preferredNeighborArrayList.remove(peerInfo.get(i).peerInt);
                             }
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
@@ -315,7 +321,7 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = false;
                             // Send message
                             log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
-                            allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
+                            CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
                             preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
                         }
                         // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
@@ -338,7 +344,7 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = false;
                             //Send message
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
-                            allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
+                            CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
                             log.WriteLog(3, peerId, peerInfo.get(i).peerInt + 50);
                            // log.WriteLog(peerId, "random val " + Integer.toString(peerInfo.get(i).piecesDownloaded));
                         }
@@ -349,7 +355,7 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = true;
                             // Send message
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
-                            allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
+                            CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
                             log.WriteLog(2, peerId, peerInfo.get(i).peerInt + 50);
                            // log.WriteLog(peerId, "random val " + Integer.toString(peerInfo.get(i).piecesDownloaded));
                       //  }  
@@ -383,7 +389,8 @@ public class peerProcess extends Thread {
             // connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
         
             log.WriteLog(6, peerId, selected.peerInt);
-            allChokeMessages.add(new Tuple(selected.peerInt, msg.createCUINMessage(1)));
+            CorUchokeMessages.add(new Tuple(selected.peerInt, msg.createCUINMessage(1)));
+            messageToSend.set(true);
         } catch(IllegalArgumentException q){
             throw q;
         }catch (Exception e) {
@@ -473,6 +480,7 @@ public class peerProcess extends Thread {
                     initExpectedPeer = remotePeer;
                     RemotePeerInfo rPI = new RemotePeerInfo(Integer.toString(remotePeer), "a", "a");  //I think this stuff isn't needed?
                     peerInfo.add(rPI);
+                    //clientSockets.put(initExpectedPeer,clientSocket);
                 } else {
                     clientSocket.close();
                 }
@@ -487,14 +495,24 @@ public class peerProcess extends Thread {
                // log.WriteLog(peerId, "BITFIELD PASSED");
                  boolean allPeersDone = false; // Replace condition (This is temp solution)
                 //This loop for all messages transactions
+        
                 while (!allPeersDone) {
-                    if (!allChokeMessages.isEmpty()) {
-                        log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 1");
-                        if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
-                            out.write(allChokeMessages.poll().getMessage());
-                            log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 1");
+                    if(messageToSend.get() == true){
+                        for( Tuple t : CorUchokeMessages){
+                            if (t.peerToSend == initExpectedPeer){
+                                out.write(t.message);
+                                log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE FROM T1");
+                            }
                         }
+                        messageToSend.set(false);
                     }
+                    // if (!allChokeMessages.isEmpty()) {
+                    //     log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 1");
+                    //     if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
+                    //         out.write(allChokeMessages.poll().getMessage());
+                    //         log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 1");
+                    //     }
+                    // }
                     int msgLength = in.readInt();
                     byte msgType = in.readByte();
                     byte[] msgPayload = new byte[msgLength - 1];
@@ -593,6 +611,7 @@ public class peerProcess extends Thread {
                 log.WriteLog(0, peerId, initExpectedPeer);
                 RemotePeerInfo rPI = new RemotePeerInfo(Integer.toString(initExpectedPeer), hostName, Integer.toString(sendingPort));
                 peerInfo.add(rPI);
+                // serverSockets.put()
                 log.WriteLog(peerId, "Wrote to peerinfo");
                 // connectedPeerIds.add(initExpectedPeer);
                 boolean check = checkZerosArray(bitfield);
@@ -605,38 +624,47 @@ public class peerProcess extends Thread {
                 boolean allPeersDone = false; // Replace condition (This is temp solution)
                 while (!allPeersDone)
                 {
-                    if (!allChokeMessages.isEmpty()) {
-                        log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 2");
-                        if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
-                            out.write(allChokeMessages.poll().getMessage());
-                            log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 2");
+                    if(messageToSend.get() == true){
+                        for( Tuple t : CorUchokeMessages){
+                            if (t.peerToSend == initExpectedPeer){
+                                out.write(t.message);
+                                log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE FROM T1");
+                            }
                         }
+                        messageToSend.set(false);
                     }
+                    // if (!allChokeMessages.isEmpty()) {
+                    //     log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 2");
+                    //     if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
+                    //         out.write(allChokeMessages.poll().getMessage());
+                    //         log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 2");
+                    //     }
+                    // }
                     int msgLength = in.readInt();
                     byte msgType = in.readByte();
                     byte[] msgPayload = new byte[msgLength - 1];
                     in.readFully(msgPayload);
                     log.WriteLog(peerId, "Got the message of type: " + Byte.toString(msgType));
-                    switch (Byte.toString(msgType))
+                    switch (msgType)
                     {
-                        case "0":
+                        case 0:
                             log.WriteLog(peerId, "I HATE BEING CHOKED!");
                             break;
-                        case "1":
+                        case 1:
                             log.WriteLog(peerId, "OH BOY I GOT UNCHOKED YEAHHHH");
                             int pieceIndex = getRandomPieceIndex();
                             out.write(msg.createHOrRMessage(6,pieceIndex));
                             log.WriteLog(peerId, peerId + ": sent a request message for index" + pieceIndex);
                             break;
-                        case "2":
+                        case 2:
                             log.WriteLog(4, peerId, initExpectedPeer);
                            // allPeersDone = true;
                             break;
-                        case "3":
+                        case 3:
                             log.WriteLog(5, peerId, initExpectedPeer);
                            // allPeersDone = true;
                             break;
-                        case "4":
+                        case 4:
                             msg.parseMsgPayload(msgType, msgPayload);
                             int receivedIndex = msg.msgPieceIndex;
                             if(bitfield[receivedIndex] == 0){
@@ -645,7 +673,7 @@ public class peerProcess extends Thread {
                                 out.write(msg.createCUINMessage(3));
                             }
                             break;
-                        case "5":
+                        case 5:
                             msg.parseMsgPayload(msgType, msgPayload);
                             ArrayList<Integer> missing = findMissingPieces(bitfield, msg.getMsgBitfield());
                             if (missing.size() > 0) {
@@ -654,7 +682,7 @@ public class peerProcess extends Thread {
                                 out.write(msg.createCUINMessage(3));
                             }
                             break;
-                        case "6": 
+                        case 6: 
                             msg.parseMsgPayload(msgType, msgPayload);
                             int indexToSend = msg.getMsgPieceIndex();
                             out.write(msg.createPieceMessage(indexToSend, filePieces[indexToSend]));

@@ -40,4 +40,5 @@ public class RemotePeerInfo {
     public int getPiecesDownloaded() {
 		return piecesDownloaded;
     }
+	
 }

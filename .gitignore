@@ -2,3 +2,5 @@
 output.dat
 killscript
 addCompile.sh
+refresh
+end_script

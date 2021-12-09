@@ -88,6 +88,7 @@ public class Log {
             case 6: // change of optimistically unchoked neighbor
             log_string = dtf.format(now) + ": Peer " + selfID + " has the optimistically unchoked neighbor " + otherID + ".";
             break;
+            case 7: // 
             default: log_string = dtf.format(now) + ": Invalid Message type, switchy boi";
             break;
         }
@@ -172,6 +173,20 @@ public class Log {
         }
     }
 
+    public void WriteLog(int selfID, String msg) throws IOException 
+    {
+        LocalDateTime now = LocalDateTime.now();
+        String log_string;
+        log_string = dtf.format(now) + ": Peer " + selfID + msg;
+        try{
+            bw.write(log_string);
+            bw.newLine();
+            bw.flush();
+        }
+        catch(IOException e){
+            throw e;
+        }
+    }
     // Uncomment below code for testing.
 
     // public static void main(String args[]){

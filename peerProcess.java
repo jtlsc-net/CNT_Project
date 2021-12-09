@@ -528,6 +528,14 @@ public class peerProcess extends Thread {
                     //         log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 1");
                     //     }
                     // }
+                    PushbackInputStream pbi = new PushbackInputStream(in);
+                    int singleByte = pbi.read();
+                    if (singleByte == -1)
+                    {
+                        log.WriteLog(peerId, "Hey there's nothing to read time to continue");
+                        continue;
+                    }
+                    pbi.unread(singleByte);
                     int msgLength = in.readInt();
                     byte msgType = in.readByte();
                     byte[] msgPayload = new byte[msgLength - 1];
@@ -557,7 +565,7 @@ public class peerProcess extends Thread {
                             break;
                         case 4: // have
                             msg.parseMsgPayload(msgType, msgPayload);
-                            int receivedIndex = msg.msgPieceIndex;
+                            int receivedIndex = msg.getMsgPieceIndex();
                             if(bitfield[receivedIndex] == 0){
                                 out.write(msg.createCUINMessage(2));
                             }else {
@@ -582,7 +590,7 @@ public class peerProcess extends Thread {
                             //log.WriteLog(peerId,": recieved a request for pieceIndex:" + msg.getMsgPieceIndex() +  "and sent");
                             break;
                         case 7: // piece 
-                            //msg.parseMsgPayload(msgType, msgPayload);
+                            msg.parseMsgPayload(msgType, msgPayload);
                             //int recievedIndex = msg.getMsgPieceIndex();
 
                             log.WriteLog(peerId,": recieved a piece with Index:" + msg.getMsgPieceIndex() +  "from " + initExpectedPeer);
@@ -597,6 +605,9 @@ public class peerProcess extends Thread {
                 // lol
                 try{
                     log.WriteLog(peerId, "There was a problem with the loop.");
+                    StringWriter sw = new StringWriter();
+                    e.printStackTrace(new PrintWriter(sw));
+                    log.WriteLog(peerId, sw.toString());
                 }catch(IOException f){
                     //lol
                 }
@@ -666,6 +677,14 @@ public class peerProcess extends Thread {
                     //         log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 2");
                     //     }
                     // }
+                    PushbackInputStream pbi = new PushbackInputStream(in);
+                    int singleByte = pbi.read();
+                    if (singleByte == -1)
+                    {
+                        log.WriteLog(peerId, "Hey there's nothing to read time to continue");
+                        continue;
+                    }
+                    pbi.unread(singleByte);
                     int msgLength = in.readInt();
                     byte msgType = in.readByte();
                     byte[] msgPayload = new byte[msgLength - 1];
@@ -696,7 +715,7 @@ public class peerProcess extends Thread {
                             break;
                         case 4: // have
                             msg.parseMsgPayload(msgType, msgPayload);
-                            int receivedIndex = msg.msgPieceIndex;
+                            int receivedIndex = msg.getMsgPieceIndex();
                             if(bitfield[receivedIndex] == 0){
                                 out.write(msg.createCUINMessage(2));
                             }else {
@@ -721,7 +740,7 @@ public class peerProcess extends Thread {
                             //log.WriteLog(peerId,": recieved a request for pieceIndex:" + msg.getMsgPieceIndex() +  "and sent");
                             break;
                         case 7: // piece 
-                            //msg.parseMsgPayload(msgType, msgPayload);
+                            msg.parseMsgPayload(msgType, msgPayload);
                             //int recievedIndex = msg.getMsgPieceIndex();
 
                             log.WriteLog(peerId,": recieved a piece with Index:" + msg.getMsgPieceIndex() +  "from " + initExpectedPeer);

@@ -1,6 +1,7 @@
 import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.Hashtable;
 import java.util.concurrent.atomic.*;
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -20,15 +21,17 @@ public class peerProcess extends Thread {
     private boolean unchoked = false;
     private boolean choked = false;
     AtomicBoolean messageToSend = new AtomicBoolean(false);
-    private static ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
+    private static volatile ArrayList<RemotePeerInfo> peerInfo = new ArrayList<>();
     private static HashMap<Integer, peerProcess> connectedPeers = new HashMap<Integer, peerProcess>();
     private static ArrayList<Integer> connectedPeerIds = new ArrayList<Integer>();
     private static ArrayList<Integer> preferredNeighborArrayList = new ArrayList<Integer>();
     private static Queue<Tuple> allChokeMessages = new LinkedList<Tuple>();
     private static ArrayList<Tuple> CorUchokeMessages = new ArrayList<Tuple>();
-    private static Map<Integer,Socket> clientSockets = new HashMap<Integer,Socket>();
-    private static Map<Integer,Socket> serverSockets = new HashMap<Integer,Socket>();
-    private static Map<Integer,int[]> neighborBitfields = new HashMap<Integer,int[]>();
+    private static Hashtable<Integer,Socket> clientSockets = new Hashtable<Integer,Socket>();
+    private static Hashtable<Integer,Socket> serverSockets = new Hashtable<Integer,Socket>();
+    private static Hashtable<Integer,int[]> neighborBitfields = new Hashtable<Integer,int[]>();
+    private static Hashtable<Integer, RemotePeerInfo> preferredNeighborTable = new Hashtable<Integer, RemotePeerInfo>();
+    private Enumeration<Integer> e;
     private static Log log;
     private String fileName = "";
     private int fileSize = 0;
@@ -218,7 +221,7 @@ public class peerProcess extends Thread {
         } else {
             Arrays.fill(bitfield, 0);
         }
-        messageToSend.set(true);
+        // messageToSend.set(true);
     }
 
     public boolean checkZerosArray(int[] bitfield) {
@@ -292,11 +295,12 @@ public class peerProcess extends Thread {
 
                                 // Send message
                                 
-                                out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
-                                out.write(msg.createCUINMessage(1));
-                              //  log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
-                               // CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
-                                preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
+                                // out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
+                                // out.write(msg.createCUINMessage(1));
+                               log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                               allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
+                                // preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
+                                preferredNeighborTable.put(peerInfo.get(i).peerInt, peerInfo.get(i));
                             }
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
                         } else {
@@ -305,14 +309,20 @@ public class peerProcess extends Thread {
                                 peerInfo.get(i).choked = true;
                                 // Send message
                                 
-                                out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
-                                out.write(msg.createCUINMessage(0));
-                              //  log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
-                               // CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
-                                preferredNeighborArrayList.remove(peerInfo.get(i).peerInt);
+                                // out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
+                                // out.write(msg.createCUINMessage(0));
+                               log.WriteLog(2, peerId, peerInfo.get(i).peerInt);
+                               allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
+                                // preferredNeighborArrayList.remove(Integer.valueOf(peerInfo.get(i).peerInt));
+                                preferredNeighborTable.remove(peerInfo.get(i).peerInt);
                             }
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
                         }
+                    }
+                    preferredNeighborArrayList.clear();
+                    e = preferredNeighborTable.keys();
+                    while(e.hasMoreElements()){
+                        preferredNeighborArrayList.add(e.nextElement());
                     }
                     log.WriteLog(peerId, preferredNeighborArrayList);
                     //Fairly certain we calculate optimistic unchoking separately ~jlsc
@@ -329,14 +339,20 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = false;
                             // Send message
                             //log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
-                            out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
-                            out.write(msg.createCUINMessage(1));
-                            //log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
-                           // CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
-                            preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
+                            // out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
+                            // out.write(msg.createCUINMessage(1));
+                            log.WriteLog(3, peerId, peerInfo.get(i).peerInt);
+                            allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
+                            // preferredNeighborArrayList.add(peerInfo.get(i).peerInt);
+                            preferredNeighborTable.put(peerInfo.get(i).peerInt, peerInfo.get(i));
                         }
                         // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
                         // optimisticallyUnchoke();
+                    }
+                    preferredNeighborArrayList.clear();
+                    e = preferredNeighborTable.keys();
+                    while(e.hasMoreElements()){
+                        preferredNeighborArrayList.add(e.nextElement());
                     }
                     log.WriteLog(peerId, preferredNeighborArrayList);
                 } catch (Exception e) {
@@ -355,11 +371,8 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = false;
                             //Send message
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(1));
-                            out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
-                                out.write(msg.createCUINMessage(1));
-                            //CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
-                            //log.WriteLog(3, peerId, peerInfo.get(i).peerInt + 50);
-                           // log.WriteLog(peerId, "random val " + Integer.toString(peerInfo.get(i).piecesDownloaded));
+                            allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(1)));
+                            log.WriteLog(3, peerInfo.get(i).peerInt, peerId);
                         }
                         neighborsSelected += 1;
                     } else { // choke others
@@ -368,11 +381,10 @@ public class peerProcess extends Thread {
                             peerInfo.get(i).choked = true;
                             // Send message
                             // connectedPeers.get(peerInfo.get(i).peerInt).sendMessage(msg.createCUINMessage(0));
-                            out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
-                                out.write(msg.createCUINMessage(0));
-                           // CorUchokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
-                           // log.WriteLog(2, peerId, peerInfo.get(i).peerInt + 50);
-                           // log.WriteLog(peerId, "random val " + Integer.toString(peerInfo.get(i).piecesDownloaded));
+                            // out = new DataOutputStream(clientSockets.get(peerInfo.get(i).peerInt).getOutputStream());
+                            //     out.write(msg.createCUINMessage(0));
+                           allChokeMessages.add(new Tuple(peerInfo.get(i).peerInt, msg.createCUINMessage(0)));
+                           log.WriteLog(2, peerInfo.get(i).peerInt, peerId);
                       //  }  
                     }
                 }
@@ -404,10 +416,10 @@ public class peerProcess extends Thread {
             // connectedPeers.get(selected.peerInt).sendMessage(msg.createCUINMessage(1));
         
             log.WriteLog(6, peerId, selected.peerInt);
-            out = new DataOutputStream(clientSockets.get(selected.peerInt).getOutputStream());
-                    out.write(msg.createCUINMessage(1));
-            //CorUchokeMessages.add(new Tuple(selected.peerInt, msg.createCUINMessage(1)));
-            messageToSend.set(true);
+            // out = new DataOutputStream(clientSockets.get(selected.peerInt).getOutputStream());
+            //         out.write(msg.createCUINMessage(1));
+            allChokeMessages.add(new Tuple(selected.peerInt, msg.createCUINMessage(1)));
+            // messageToSend.set(true);
         } catch(IllegalArgumentException q){
             throw q;
         }catch (Exception e) {
@@ -505,7 +517,7 @@ public class peerProcess extends Thread {
               //  log.WriteLog(peerId, "hey check zeros does work");
                 if (!checkZerosArray(bitfield)) {
                     out.write(msg.createBitFieldMessage(bitfield));
-                    log.WriteLog(peerId, "hey we have bitfield");
+                    // log.WriteLog(peerId, "hey we have bitfield");
                 } // 1,2,3,4,5,7,8
                // log.WriteLog(peerId, "BITFIELD PASSED");
                  boolean allPeersDone = false; // Replace condition (This is temp solution)
@@ -521,13 +533,13 @@ public class peerProcess extends Thread {
                     //     }
                     //     messageToSend.set(false);
                     // }
-                    // if (!allChokeMessages.isEmpty()) {
-                    //     log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 1");
-                    //     if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
-                    //         out.write(allChokeMessages.poll().getMessage());
-                    //         log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 1");
-                    //     }
-                    // }
+                    if (!allChokeMessages.isEmpty()) {
+                        log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 1");
+                        if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
+                            sendMessage(allChokeMessages.poll().getMessage());
+                            log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 1");
+                        }
+                    }
                     PushbackInputStream pbi = new PushbackInputStream(in);
                     int singleByte = pbi.read();
                     if (singleByte == -1)
@@ -544,11 +556,11 @@ public class peerProcess extends Thread {
                     switch (msgType) {
                         case 0: // choked
                              //log.WriteLog(peerId, "I HATE BEING CHOKED!");
-                             log.WriteLog(2, peerId,initExpectedPeer);
+                            //  log.WriteLog(2, peerId,initExpectedPeer);
                             break;
                         case 1://unchoked
                             //log.WriteLog(peerId, "OH BOY I GOT UNCHOKED YEAHHHH");
-                            log.WriteLog(3, peerId,initExpectedPeer);
+                            // log.WriteLog(3, peerId,initExpectedPeer);
                             int pieceIndex = getRandomPieceIndex(initExpectedPeer);
                             log.WriteLog(peerId, peerId + ": about to send a request message for index " + pieceIndex + " to " + initExpectedPeer);
                            // int pieceIndex = getRandomPieceIndex();
@@ -649,13 +661,13 @@ public class peerProcess extends Thread {
                 RemotePeerInfo rPI = new RemotePeerInfo(Integer.toString(initExpectedPeer), hostName, Integer.toString(sendingPort));
                 peerInfo.add(rPI);
                 serverSockets.put(initExpectedPeer,serverSocket);
-                log.WriteLog(peerId, "Wrote to peerinfo");
+                // log.WriteLog(peerId, "Wrote to peerinfo");
                 // connectedPeerIds.add(initExpectedPeer);
                 boolean check = checkZerosArray(bitfield);
                // log.WriteLog(peerId, "hey check zeros does work");
                 if (!checkZerosArray(bitfield)) {
                     out.write(msg.createBitFieldMessage(bitfield));
-                    log.WriteLog(peerId, "hey we have bitfield");
+                    // log.WriteLog(peerId, "hey we have bitfield");
                 }
                 //log.WriteLog(peerId, "BITFIELD PASSED");
                 boolean allPeersDone = false; // Replace condition (This is temp solution)
@@ -670,13 +682,13 @@ public class peerProcess extends Thread {
                     //     }
                     //     messageToSend.set(false);
                     // }
-                    // if (!allChokeMessages.isEmpty()) {
-                    //     log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 2");
-                    //     if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
-                    //         out.write(allChokeMessages.poll().getMessage());
-                    //         log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 2");
-                    //     }
-                    // }
+                    if (!allChokeMessages.isEmpty()) {
+                        log.WriteLog(peerId, "HEY QUEUE IS NOT EMPTY 2");
+                        if (allChokeMessages.peek().getPeerToSend() == initExpectedPeer) {
+                            sendMessage(allChokeMessages.poll().getMessage());
+                            log.WriteLog(peerId, "HEY SENDING CHOKE/UNCHOKE MESSAGE 2");
+                        }
+                    }
                     PushbackInputStream pbi = new PushbackInputStream(in);
                     int singleByte = pbi.read();
                     if (singleByte == -1)
@@ -694,11 +706,11 @@ public class peerProcess extends Thread {
                     {
                         case 0: // choked
                              //log.WriteLog(peerId, "I HATE BEING CHOKED!");
-                             log.WriteLog(2, peerId,initExpectedPeer);
+                            //  log.WriteLog(2, peerId,initExpectedPeer);
                             break;
                         case 1://unchoked
                             //log.WriteLog(peerId, "OH BOY I GOT UNCHOKED YEAHHHH");
-                            log.WriteLog(3, peerId,initExpectedPeer);
+                            // log.WriteLog(3, peerId,initExpectedPeer);
                             int pieceIndex = getRandomPieceIndex(initExpectedPeer);
                             log.WriteLog(peerId, peerId + ": about to send a request message for index " + pieceIndex + " to " + initExpectedPeer);
                            // int pieceIndex = getRandomPieceIndex();
@@ -769,8 +781,8 @@ public class peerProcess extends Thread {
             // First while loop is for making sure that peerInfo gets populated
             // Second while loop is for normal ops
             try{
-                Thread.sleep(unchokingInterval * 1000);
                 while(waitUpdate){
+                Thread.sleep(unchokingInterval * 1000);
                     try{
                         reselectNeighbors();
                         waitUpdate = false;
@@ -781,12 +793,15 @@ public class peerProcess extends Thread {
                             //aayyy
                         }
                     }catch(Throwable t){
-                        try{
-                            log.WriteLog(peerId, "Throwable out");
-                        }
-                        catch(IOException g){
-                            //yhafui
-                        }
+                        // try{
+                        //     log.WriteLog(peerId, "Throwable out");
+                        //     StringWriter sw = new StringWriter();
+                        //     t.printStackTrace(new PrintWriter(sw));
+                        //     log.WriteLog(peerId, sw.toString());
+                        // }
+                        // catch(IOException g){
+                        //     //yhafui
+                        // }
                         //lol
                     }
                 }
@@ -799,24 +814,45 @@ public class peerProcess extends Thread {
                 try{
                     Thread.sleep(unchokingInterval * 1000);
                     reselectNeighbors();
-                }catch(InterruptedException a){
-                    //lol
+                // }catch(InterruptedException a){
+                //     //lol
+                // }
+                }catch(Exception e){
+                    // try{
+                    //     log.WriteLog(peerId, "Throwable out");
+                    //     StringWriter sw = new StringWriter();
+                    //     e.printStackTrace(new PrintWriter(sw));
+                    //     log.WriteLog(peerId, sw.toString());
+                    // }
+                    // catch(IOException g){
+                    //     //yhafui
+                    // }
                 }
-
             }
         }
         if(threadType == 4){
             // Handle optimistic unchoke
             boolean waitFirstUpdate = true;
             try{
-                Thread.sleep(optimisticUnchokingInterval * 1000);
                 while(waitFirstUpdate){
+                Thread.sleep(optimisticUnchokingInterval * 1000);
                     try{
                         optimisticallyUnchoke();
                         waitFirstUpdate = false;
                     }
-                    catch(IllegalArgumentException e){
-                        // Expected if there is no choked peerId.
+                    // catch(IllegalArgumentException e){
+                    //     // Expected if there is no choked peerId.
+                    // }
+                    catch(Exception e){
+                        // try{
+                        //     log.WriteLog(peerId, "Throwable out");
+                        //     StringWriter sw = new StringWriter();
+                        //     e.printStackTrace(new PrintWriter(sw));
+                        //     log.WriteLog(peerId, sw.toString());
+                        // }
+                        // catch(IOException g){
+                        //     //yhafui
+                        // }
                     }
                 }
             }
@@ -827,15 +863,21 @@ public class peerProcess extends Thread {
                 try{
                     Thread.sleep(optimisticUnchokingInterval * 1000);
                     optimisticallyUnchoke();
-                    for(int i = 0; i < peerInfo.size(); i++){
-                        if(peerInfo.get(i).optimisticallyUnchoked){
-                            log.WriteLog(peerId, " optomitistically unchoked? " + String.valueOf(peerInfo.get(i).optimisticallyUnchoked));
-                        }
-                    }
-                } catch(InterruptedException a){
-                    //lol again
-                }catch(IOException e){
-                    //lol again more
+                // } catch(InterruptedException a){
+                //     //lol again
+                // }catch(IOException e){
+                //     //lol again more
+                // }
+                }catch(Exception e){
+                    // try{
+                    //     log.WriteLog(peerId, "Throwable out");
+                    //     StringWriter sw = new StringWriter();
+                    //     e.printStackTrace(new PrintWriter(sw));
+                    //     log.WriteLog(peerId, sw.toString());
+                    // }
+                    // catch(IOException g){
+                    //     //yhafui
+                    // }
                 }
             }
         }
